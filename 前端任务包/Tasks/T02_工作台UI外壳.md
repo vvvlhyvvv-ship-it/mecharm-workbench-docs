@@ -1,0 +1,27 @@
+# T02 工作台 UI 外壳
+
+## 目标
+按 02 设计方案搭 PySide6 三栏外壳：顶栏五步条 + 左树栏 + 中 WebEngine 视口 + 右上下文面板 + 底部状态栏。**内核未接入，用占位数据。**
+
+## 前置阅读
+02 设计方案全文 ｜ 03 架构 §2 §5 ｜ T01 完成
+
+## 步骤
+1. `app/shell.py`：主窗体三栏布局（左右栏可折叠，1920×1080 与 1366×768 无横向滚动）
+2. `app/stepbar.py`：五步进度条组件（当前高亮/未达置灰/完成可回看），暴露 `set_step_enabled(n, bool)`
+3. `app/panel.py`：右栏上下文栈，五个占位页各显示步骤名+"功能开发中（TXX）"
+4. `app/viewpane.py`：QWebEngineView 加载 `view/index.html`（深色空场景卡+失败错误卡，不白屏）
+5. `app/bridge.py`：桥骨架——`call_view(type,payload)` 与 `on_view_msg(type,data)` 两个口，协议按 03 架构 §5（本单只实现通路+echo 测试，不实现业务消息）
+6. `app/statusbar.py`：日志一行滚动 API `log(msg)` + 频率角标占位 + 版本号；`app/mode.py`：模式徽标[仿真/联动]与在线灯组件
+7. 全局字号/按钮规格按 02 §4 落地（Qt 样式表统一定义，禁散写）
+
+## 完成标准
+- [ ] 启动即见完整骨架，两档分辨率截图留 `evidence/T02/`
+- [ ] 步骤条置灰/高亮/回看逻辑用按钮模拟可演示
+- [ ] 桥 echo：Python 发 `{"type":"ping"}`→视口回→日志可见（证明双向通路）
+- [ ] 正文≥14px 主按钮≥16px/高≥40px（量测记录写进汇报）
+- [ ] commit：`feat(T02): 工作台外壳`
+
+## 禁止事项
+- 禁实现任何取点/路径/碰撞业务（后续单的事）
+- 禁引入 PyQt、Qt3D、任何前端框架（React/Vue）——只用 PySide6 + 原生 ES module
