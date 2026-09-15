@@ -1,0 +1,208 @@
+# machine.yaml —— 参数体系样例（T03 交付；字段结构以 03 架构 §4 为准，禁自增删字段）
+#
+# ⚠️ 本文件是「样例」，全部数值均为占位。行程／零点／正方向／比例系数以电气·机械
+#    回执为准（踏勘确认清单第 3、5、8 项；契约 Q-11 图纸）；回执冻结前逐轴标
+#    `pending: true`，加载器只告警不拒绝（core/config.py）。回执到达后**只改此文件
+#    不改代码**（01 需求 D-6）。各节注释写明该节数值的来源与状态。
+#
+# 轴表口径：实机 **22 个受控运动轴**（04 §7.2-G11；逐轴清单见
+#    参考资料/踏勘确认清单与运动轴清单-附录A填报底稿_V1.0.md 第三部分）。
+#    ⛔ 禁把契约 §5.2 的 8 轴上界（`Pos = ARRAY[0..7]`）或 J1~J6 轴名当实机口径：
+#       契约扩容（≥22 轴＋AxisMask）随契约 V1.3 窗口处理；过渡期段打包按
+#       `opcua.pack_profile: v1_2_8axis`（56 B/段、未用轴位填 0、无 AxisMask），
+#       22 轴全表只存在于本文件内部，**禁把 22 轴硬塞进 V1.2 布局**。
+# 键名一律 ASCII（禁中文键名）；注释可中文。单位按契约第 7 章：长度 mm、角度 deg、
+#    线速度 mm/s、角速度 deg/s、加速度 mm/s²、时间 ms。
+
+machine:
+  name: 多功能机械臂三维编程工作台
+  schema_ver: "1.0"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# axes —— 22 个受控运动轴
+#   role: trajectory＝轨迹级联动轴（逐点参与路径与碰撞校核，下发段只含当前模式轴）
+#         setup     ＝工序级设定轴（按批次设定，**软件只读**，不进下发段）
+#   travel／zero_offset／direction／scale 一律占位：移动副统一 [0, 1000] mm、
+#         回转副统一 [-180, 180] deg、零点 0、direction 1、scale null（＝已是工程值）。
+#         ⚠️ 占位值**不是**实测行程；回执前不得据此判定可达性结论对外承诺。
+#   scale: null 表示回读已是工程值；若踏勘第 5 项回执为原始计数，则改填
+#         mm_per_pulse／deg_per_pulse，由 T04 的 raw_to_eng 换算（契约 §7.4 最高危项）。
+#   coupling: sync＝多驱动单元非刚性连接（龙门双驱类），group 内同步偏差超
+#         sync_tol_mm 报 Violation（T04 步骤 4，配置驱动、禁硬编码容差）。
+#         哪些轴属双驱取自附录A底稿「驱动形式」列；契约 §6.4-bit3 声明
+#         **Q-9 回执前不启用**该监视，故 sync_tol_mm 亦为占位。
+# ─────────────────────────────────────────────────────────────────────────────
+axes:
+  # ── 本体 6 轴（轨迹级）──
+  # X1 大车（钢轨行走）：四轮各一只液压马达，视为同一行走轴的四个驱动单元，未另计轴
+  - {id: X1, type: prismatic, role: trajectory, travel: [0.0, 1000.0], zero_offset_mm: 0.0,
+     direction: 1, scale: null, coupling: {type: sync, group: gantry_travel, sync_tol_mm: 0.5},
+     pending: true}
+  # Z1 上部机架：四只升降伺服油缸（双驱类同步）
+  - {id: Z1, type: prismatic, role: trajectory, travel: [0.0, 1000.0], zero_offset_mm: 0.0,
+     direction: 1, scale: null, coupling: {type: sync, group: frame_lift, sync_tol_mm: 0.5},
+     pending: true}
+  # Y1 平移架：伺服电机＋齿轮齿条（单驱动）
+  - {id: Y1, type: prismatic, role: trajectory, travel: [0.0, 1000.0], zero_offset_mm: 0.0,
+     direction: 1, scale: null, coupling: null, pending: true}
+  # X2 机械臂升降架：伺服电机＋齿轮齿条（单驱动）
+  - {id: X2, type: prismatic, role: trajectory, travel: [0.0, 1000.0], zero_offset_mm: 0.0,
+     direction: 1, scale: null, coupling: null, pending: true}
+  # Z2 机械臂：两支升降油缸、四组滑块导向（双驱类同步）
+  - {id: Z2, type: prismatic, role: trajectory, travel: [0.0, 1000.0], zero_offset_mm: 0.0,
+     direction: 1, scale: null, coupling: {type: sync, group: arm_lift, sync_tol_mm: 0.5},
+     pending: true}
+  # X3 机械臂三级筒：伸缩油缸＋链条倍速（1:2）——二级筒动 10mm → 三级筒相对一级筒动 20mm
+  # ⚠️ master 的归属是**已知缺口**：倍速链的主动件（二级筒／伸缩油缸）**不是**22 轴清单里
+  #    的受控轴，故无第二根轴可指。此处按「同一轴的驱动级换算」填 master: X3（三级筒工程
+  #    位置 = 其驱动位移 × 2），语义是**驱动级比例、不是跨轴约束**——T04 的 fk **不得**据此
+  #    把 X3 当成「另一根轴 × 2」。待踏勘确认清单第 4 项回执（软件下发三级筒实际位置，还是
+  #    由 PLC 按下发值换算）后改此文件、不改代码。已上报指挥方登记。
+  - {id: X3, type: prismatic, role: trajectory, travel: [0.0, 1000.0], zero_offset_mm: 0.0,
+     direction: 1, scale: null, coupling: {type: ratio, master: X3, ratio: 2.0},
+     pending: true}
+
+  # ── 五个安装架轴（工序级设定轴，按批次对位、软件只读）──
+  # 踏勘第 6 项待回执：YA~YE 与 Y1 同向布置、「各自移动互不干涉」是控制互锁还是物理不可能
+  - {id: YA, type: prismatic, role: setup, travel: [0.0, 1000.0], zero_offset_mm: 0.0,
+     direction: 1, scale: null, coupling: null, pending: true}
+  - {id: YB, type: prismatic, role: setup, travel: [0.0, 1000.0], zero_offset_mm: 0.0,
+     direction: 1, scale: null, coupling: null, pending: true}
+  - {id: YC, type: prismatic, role: setup, travel: [0.0, 1000.0], zero_offset_mm: 0.0,
+     direction: 1, scale: null, coupling: null, pending: true}
+  - {id: YD, type: prismatic, role: setup, travel: [0.0, 1000.0], zero_offset_mm: 0.0,
+     direction: 1, scale: null, coupling: null, pending: true}
+  - {id: YE, type: prismatic, role: setup, travel: [0.0, 1000.0], zero_offset_mm: 0.0,
+     direction: 1, scale: null, coupling: null, pending: true}
+
+  # ── 打磨臂专用轴（ZA2 是否为 ZA1 之上的叠加微调轴＝踏勘第 7 项待回执，影响 T04 链定义）──
+  - {id: ZA1, type: prismatic, role: trajectory, travel: [0.0, 1000.0], zero_offset_mm: 0.0,
+     direction: 1, scale: null, coupling: null, pending: true}
+  - {id: ZA2, type: prismatic, role: trajectory, travel: [0.0, 1000.0], zero_offset_mm: 0.0,
+     direction: 1, scale: null, coupling: null, pending: true}
+  - {id: RA, type: revolute, role: trajectory, travel: [-180.0, 180.0], zero_offset_deg: 0.0,
+     direction: 1, scale: null, coupling: null, pending: true}
+
+  # ── 氧化皮吸附臂专用轴（底稿「驱动形式」列记 FB1 摆动 180°、FB2 摆动 90°；
+  #    角度边界与零点仍属踏勘第 8 项待回执，故 travel 用统一占位、不据摆动角反推）──
+  - {id: ZB, type: prismatic, role: trajectory, travel: [0.0, 1000.0], zero_offset_mm: 0.0,
+     direction: 1, scale: null, coupling: null, pending: true}
+  - {id: FB1, type: revolute, role: trajectory, travel: [-180.0, 180.0], zero_offset_deg: 0.0,
+     direction: 1, scale: null, coupling: null, pending: true}
+  - {id: FB2, type: revolute, role: trajectory, travel: [-180.0, 180.0], zero_offset_deg: 0.0,
+     direction: 1, scale: null, coupling: null, pending: true}
+
+  # ── 脱模剂喷涂臂专用轴（FC 摆动 180°；RC 的旋转基准轴原文记「沿 ZA1 轴旋转」疑为笔误，
+  #    属踏勘第 7 项待回执）──
+  - {id: ZC, type: prismatic, role: trajectory, travel: [0.0, 1000.0], zero_offset_mm: 0.0,
+     direction: 1, scale: null, coupling: null, pending: true}
+  - {id: FC, type: revolute, role: trajectory, travel: [-180.0, 180.0], zero_offset_deg: 0.0,
+     direction: 1, scale: null, coupling: null, pending: true}
+  - {id: RC, type: revolute, role: trajectory, travel: [-180.0, 180.0], zero_offset_deg: 0.0,
+     direction: 1, scale: null, coupling: null, pending: true}
+
+  # ── 氧化皮破碎臂专用轴 ──
+  - {id: ZD, type: prismatic, role: trajectory, travel: [0.0, 1000.0], zero_offset_mm: 0.0,
+     direction: 1, scale: null, coupling: null, pending: true}
+
+  # ── 玻璃垫放置臂专用轴（夹爪开合；**单位待确认**＝踏勘第 8 项，占位按 mm）──
+  - {id: KE, type: prismatic, role: trajectory, travel: [0.0, 1000.0], zero_offset_mm: 0.0,
+     direction: 1, scale: null, coupling: null, pending: true}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# modes —— 工作模式 → 当前有效轴子集（快接换臂，03 §4「实机轴系口径」；界面入口见
+#          04 §7.2-G16，由 T02 顶栏选择器承接）
+#   子集 = 本体 6 轴 ＋ 所挂臂专用轴；**轨迹级轴计数上限 9**（加载器校验，超限拒载）。
+#   YA~YE 是工序级设定轴（role: setup、软件只读），不进下发段，故不列入任何模式。
+#   ⚠️ 工具臂专用轴是否参与轨迹编程＝踏勘第 2 项待回执：若全由 PLC 专用程序自控，
+#      各模式轴子集收敛为本体 6 轴（只改此文件）。
+# ─────────────────────────────────────────────────────────────────────────────
+modes:
+  - {id: grind, name: 打磨, axes: [X1, Z1, Y1, X2, Z2, X3, ZA1, ZA2, RA]}
+  - {id: scale_suction, name: 氧化皮吸附, axes: [X1, Z1, Y1, X2, Z2, X3, ZB, FB1, FB2]}
+  - {id: release_spray, name: 脱模剂喷涂, axes: [X1, Z1, Y1, X2, Z2, X3, ZC, FC, RC]}
+  - {id: scale_crush, name: 氧化皮破碎, axes: [X1, Z1, Y1, X2, Z2, X3, ZD]}
+  - {id: glass_pad, name: 玻璃垫放置, axes: [X1, Z1, Y1, X2, Z2, X3, KE]}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# links —— 连杆几何参数（T04 的 fk 按 axes+links 做链式变换）
+#   ⚠️ length_mm **全部为占位 0.0**：各连杆实际长度待契约 Q-11 图纸回执；parent 关系按
+#      附录A底稿「所属机构」列与踏勘第 6/7 项排布，**非实测拓扑**。回执后只改此文件。
+#   占位 0.0 意味着 fk 各级只有轴位移、无连杆偏置——T04 用例①的「理论值」须按此口径手算。
+# ─────────────────────────────────────────────────────────────────────────────
+links:
+  - {id: base, length_mm: 0.0, parent: null}          # 设备基础／产线基准（契约 §7.1 原点待确认）
+  - {id: gantry, length_mm: 0.0, parent: base}         # 大车（X1）
+  - {id: frame, length_mm: 0.0, parent: gantry}        # 上部机架（Z1）
+  - {id: carriage, length_mm: 0.0, parent: frame}      # 平移架（Y1）
+  - {id: arm_lift, length_mm: 0.0, parent: carriage}   # 机械臂升降架（X2）
+  - {id: arm, length_mm: 0.0, parent: arm_lift}        # 机械臂（Z2）
+  - {id: tube3, length_mm: 0.0, parent: arm}           # 三级筒（X3）
+  - {id: flange, length_mm: 0.0, parent: tube3}        # 快接法兰：当前所挂多功能臂的挂载点
+  - {id: mount_a, length_mm: 0.0, parent: carriage}    # 打磨臂安装架（YA，停放／对位工位）
+  - {id: mount_b, length_mm: 0.0, parent: carriage}    # 氧化皮吸附臂安装架（YB）
+  - {id: mount_c, length_mm: 0.0, parent: carriage}    # 脱模剂喷涂臂安装架（YC）
+  - {id: mount_d, length_mm: 0.0, parent: carriage}    # 氧化皮破碎臂安装架（YD）
+  - {id: mount_e, length_mm: 0.0, parent: carriage}    # 玻璃垫放置臂安装架（YE）
+
+# ─────────────────────────────────────────────────────────────────────────────
+# limits —— 全局限值（禁在代码里散写字面量，一律走这里）
+#   有出处的三项：collision_envelope_mm＝契约 §8.4「建议 2–5 mm」取中；
+#     tessellate_deflection_mm＝T05 步骤 3「暂定 0.3–0.5 mm」取粗端（P0 实测后调）；
+#     path_sample_step_mm＝T08 步骤 1「样例配 50」。
+#   其余速度／加速度／预警间隙**无回执依据，为暂定占位**（各轴最大速度属踏勘第 3 项）：
+#     speed_rapid＝空程、speed_work＝作业（T07 段速度取值）、speed_max＝上界钳制。
+# ─────────────────────────────────────────────────────────────────────────────
+limits:
+  speed_max_mm_s: 500.0
+  speed_rapid_mm_s: 300.0
+  speed_work_mm_s: 50.0
+  accel_max_mm_s2: 1000.0
+  clearance_warn_mm: 20.0
+  collision_envelope_mm: 3.0
+  tessellate_deflection_mm: 0.5
+  path_sample_step_mm: 50.0
+
+# ─────────────────────────────────────────────────────────────────────────────
+# opcua —— ⚠️ **模拟期占位**：节点表按 S-1 契约 §4.1/§4.2 的 DB 布局与符号名自造
+#   （DB_SW_to_PLC 584 B＝头 8＋10×56＋预留 16；DB_PLC_to_SW 96 B），
+#   契约 §4.1 已声明实际 DB 编号待确认（契约体系 Q-7）→ **Q 回执后改此文件不改代码**。
+#   endpoint_url 固定 127.0.0.1：契约冻结前只连本机模拟器（04 §4 矩阵该行；T09）。
+#   security_policy: None ＝无加密，模拟期口径；真机安全策略待回执。
+#   read_nodes.axis_pos 为 **8 个**节点，与 pack_profile=v1_2_8axis 一致
+#     （契约 §6.1 `Pos = ARRAY[0..7]`）；V1.3 扩容后与 profile 同步改，禁只改一边。
+#   publish_interval_ms: 50 ＝ 20 Hz 回读（T09 口径）。
+# ─────────────────────────────────────────────────────────────────────────────
+opcua:
+  endpoint_url: "opc.tcp://127.0.0.1:4840"
+  security_policy: "None"      # OPC UA 策略名 None＝不加密（模拟期口径；裸写 None 会被 YAML 解析成 null）
+  ns_index: 3
+  pack_profile: v1_2_8axis
+  read_nodes:
+    axis_pos:
+      - 'ns=3;s="DB_PLC_to_SW"."Pos[0]"'
+      - 'ns=3;s="DB_PLC_to_SW"."Pos[1]"'
+      - 'ns=3;s="DB_PLC_to_SW"."Pos[2]"'
+      - 'ns=3;s="DB_PLC_to_SW"."Pos[3]"'
+      - 'ns=3;s="DB_PLC_to_SW"."Pos[4]"'
+      - 'ns=3;s="DB_PLC_to_SW"."Pos[5]"'
+      - 'ns=3;s="DB_PLC_to_SW"."Pos[6]"'
+      - 'ns=3;s="DB_PLC_to_SW"."Pos[7]"'
+    status: 'ns=3;s="DB_PLC_to_SW"."Status"'
+    heartbeat: 'ns=3;s="DB_PLC_to_SW"."Heartbeat"'
+  write_nodes:
+    cmd: 'ns=3;s="DB_SW_to_PLC"."Cmd"'
+    seg_count: 'ns=3;s="DB_SW_to_PLC"."SegCount"'
+    seg_array: 'ns=3;s="DB_SW_to_PLC"."Seg"'
+  publish_interval_ms: 50
+
+# ─────────────────────────────────────────────────────────────────────────────
+# paths —— 缓存与离线资产库根目录（T05 步骤 4/7：.brep 几何真身＋轻量化网格＋固定设备资产）
+#   ⛔ **默认必须落仓外绝对路径**：缓存内是甲方模型的几何真身（整线资产库可达 500MB），
+#      而远端实测为**公开仓**（04 §7.1-10）——落仓内一次 `git add data/` 即等于推到公网。
+#      加载器对「相对路径」与「解析后落在仓根目录内」两种取值一律拒载（ConfigError）。
+#      %LOCALAPPDATA% 由加载器 os.path.expandvars 展开。
+#      缓存目录不可用（不存在／无写权限）时**降级为不缓存并告警，绝不回落到仓内**（03 §4）。
+# ─────────────────────────────────────────────────────────────────────────────
+paths:
+  cache_dir: '%LOCALAPPDATA%\mecharm\cache'
