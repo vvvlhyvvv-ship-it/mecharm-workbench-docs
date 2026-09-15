@@ -9,7 +9,7 @@
 位置看着还行、姿态是错的，属静默错，故单独立函数并在测试里锁死。
 
 设备↔场景的**原点与轴对应**在契约 §7.1 里两条都标「待确认」（原点＝设备基础／产线基准还是
-甲方图纸全局原点；X 向＝是否取大车行走方向），故一律由调用方以 `Frame` 显式给定，
+甲方图纸全局原点；X 向＝是否取大车行走方向），故一律由调用方以 `CoordFrame` 显式给定，
 **代码内不写死**；回执后只改调用方给的配置，不改本文件。
 """
 
@@ -83,11 +83,15 @@ def to_column_major(matrix: Transform4x4) -> Transform4x4:
 
 
 @dataclass(frozen=True)
-class Frame:
+class CoordFrame:
     """一个坐标框相对其**上层框**的定位。
 
     origin_mm＝原点在上层框内的位置（mm）；rotation＝9 元素**行主序正交阵**（把本框内的
     向量映到上层框）。设备↔场景的原点与轴向属契约 §7.1「待确认」项，故一律由调用方给定。
+
+    ⚠️ 名字**不得简化回 `Frame`**：03 §3 已把 `Frame` 定给 `opcua_client.on_frames` 的回读帧
+    （＝时间戳＋各轴工程值，T09 落码）。同名不同义，在同时 import 两者的模块里会静默互相
+    覆盖（本项目已有 Q 编号双轨的前例），故本类叫 `CoordFrame`。
     """
 
     origin_mm: Point
@@ -129,8 +133,8 @@ def _determinant(rotation: Sequence[float]) -> float:
     return a * (e * i - f * h) - b * (d * i - f * g) + c * (d * h - e * g)
 
 
-def axis_swap_frame(mapping: Mapping[str, str], origin_mm: Point = ZERO_POINT) -> Frame:
-    """按「本框轴 → 上层框轴（**必须带符号**）」造一个纯换轴 Frame（原点另给，mm）。
+def axis_swap_frame(mapping: Mapping[str, str], origin_mm: Point = ZERO_POINT) -> CoordFrame:
+    """按「本框轴 → 上层框轴（**必须带符号**）」造一个纯换轴 CoordFrame（原点另给，mm）。
 
     用途＝契约 §7.1 的警告「STEP 默认 Z 向上，工厂／建筑类软件常导出 Y 向上，**模型导入后
     必须先核对朝向，不得假定**」：核对出模型是 Y-up 时给 {"x": "+x", "y": "+z", "z": "-y"}。
@@ -151,10 +155,10 @@ def axis_swap_frame(mapping: Mapping[str, str], origin_mm: Point = ZERO_POINT) -
         rotation[row * 3 + AXES_XYZ.index(source)] = sign
     if _determinant(rotation) < 0.0:
         raise ValueError(f"mapping {dict(mapping)} 构成镜像（行列式 −1）：两框都须右手系")
-    return Frame(origin_mm, tuple(rotation))
+    return CoordFrame(origin_mm, tuple(rotation))
 
 
-def model_to_device(point: Point, frame: Frame) -> Point:
+def model_to_device(point: Point, frame: CoordFrame) -> Point:
     """文件坐标系（模型自带）→ 设备坐标系（mm，右手系）。
 
     frame 描述**模型框在设备框内**的定位；模型朝向须先按契约 §7.1 核对，**不得假定 Z-up**。
@@ -162,12 +166,12 @@ def model_to_device(point: Point, frame: Frame) -> Point:
     return transform_point(frame.matrix(), point)
 
 
-def device_to_model(point: Point, frame: Frame) -> Point:
+def device_to_model(point: Point, frame: CoordFrame) -> Point:
     """设备坐标系 → 文件坐标系（mm）；`model_to_device` 的逆，往返误差见测试用例④。"""
     return _unapply(frame, point)
 
 
-def device_to_scene(point: Point, frame: Frame) -> Point:
+def device_to_scene(point: Point, frame: CoordFrame) -> Point:
     """设备坐标系 → 场景坐标系（mm，右手系、Z 竖直向上为正，契约 §7.1）。
 
     frame 描述**设备框在场景框内**的定位；场景原点与 X 向该条标「待确认」→ 由 frame 给定。
@@ -175,12 +179,12 @@ def device_to_scene(point: Point, frame: Frame) -> Point:
     return transform_point(frame.matrix(), point)
 
 
-def scene_to_device(point: Point, frame: Frame) -> Point:
+def scene_to_device(point: Point, frame: CoordFrame) -> Point:
     """场景坐标系 → 设备坐标系（mm）；`device_to_scene` 的逆，往返误差见测试用例④。"""
     return _unapply(frame, point)
 
 
-def _unapply(frame: Frame, point: Point) -> Point:
+def _unapply(frame: CoordFrame, point: Point) -> Point:
     """上层框 → 本框：Rᵀ·(p − origin)（mm）。R 正交（建框已校验）故转置即逆。"""
     delta = tuple(point[index] - frame.origin_mm[index] for index in range(3))
     rows = frame.rotation

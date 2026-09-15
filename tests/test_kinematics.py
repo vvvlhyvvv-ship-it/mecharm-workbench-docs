@@ -4,7 +4,7 @@
 长度与回转副、现场 `config/machine.yaml` 的占位 0.0 链；纸上链式乘法手算记录见交付汇报）
 ② 单轴走满行程端点 ③ 越界注入→Violation 命中轴正确 ④ 往返变换误差 <1e-6；另加两型耦合
 （sync 超差／ratio 自指驱动级倍速／跨轴覆盖／master 成环拒）、raw_to_eng 三参代数、
-build_model 四条校验、Frame 正交归一与镜像拒、行主序→列主序。
+build_model 四条校验、CoordFrame 正交归一与镜像拒、行主序→列主序。
 
 ⚠️ 合成链与 `SAMPLE_JOINTS` 都是**测试数据、不是机台事实**：「哪根轴驱动哪根连杆、沿哪个
 坐标轴动」在 `machine.yaml` 里只存在于注释（03 §4 的字段表无此项），且《踏勘确认清单》第 7
@@ -19,7 +19,7 @@ import pathlib
 import pytest
 
 from core.config import REPO_ROOT, Axis, Coupling, Link, load_machine
-from core.kinematics import (PRISMATIC, REVOLUTE, Frame, Joint, axis_swap_frame, build_model,
+from core.kinematics import (PRISMATIC, REVOLUTE, CoordFrame, Joint, axis_swap_frame, build_model,
                              check_limits, device_to_model, device_to_scene, fk, identity,
                              model_to_device, multiply, raw_to_eng, resolve_positions, rotation,
                              scene_to_device, to_column_major, transform_point, translation)
@@ -78,9 +78,9 @@ LIMIT_CASES = [({}, []), ({"L1": 10.0, "L2": 10.4}, []),
                ({"RA": -120.0}, [(KIND_TRAVEL, "RA", -120.0, (-90.0, 90.0), "deg", None)]),
                ({"X3": 600.0}, [(KIND_TRAVEL, "X3", 1200.0, (0.0, 1000.0), "mm", None)]),
                ({"L1": 10.0, "L2": 11.0}, [(KIND_SYNC, "L2", 1.0, (-0.5, 0.5), "mm", "dual")])]
-IDENTITY_FRAME = Frame((0.0, 0.0, 0.0), (1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0))
+IDENTITY_FRAME = CoordFrame((0.0, 0.0, 0.0), (1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0))
 Y_UP_TO_Z_UP = axis_swap_frame({"x": "+x", "y": "+z", "z": "-y"}, (10.0, 20.0, 30.0))
-TILTED = Frame((-5.0, 0.0, 7.5), (1.0, 0.0, 0.0, 0.0, 0.0, -1.0, 0.0, 1.0, 0.0))
+TILTED = CoordFrame((-5.0, 0.0, 7.5), (1.0, 0.0, 0.0, 0.0, 0.0, -1.0, 0.0, 1.0, 0.0))
 
 
 def _origin(pose):
@@ -144,7 +144,7 @@ def test_axis_swap_rejects_mirror_and_bad_mapping(mapping):
 def test_frame_rejects_non_orthonormal(spin):
     """建框即校验：否则逆变换按转置算会**静默出错**。"""
     with pytest.raises(ValueError, match="rotation"):
-        Frame((0.0, 0.0, 0.0), spin)
+        CoordFrame((0.0, 0.0, 0.0), spin)
 
 
 @pytest.mark.parametrize("frame", [IDENTITY_FRAME, Y_UP_TO_Z_UP, TILTED])
