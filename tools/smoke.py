@@ -10,11 +10,15 @@
 
 from __future__ import annotations
 
-import ctypes
 import importlib
 import importlib.metadata
 import os
 import sys
+
+# `python tools/smoke.py` 的 sys.path[0] 是 tools/ 而非仓根，故先补仓根才能 import app.*
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from app.bootstrap import preload_windows_icu  # noqa: E402  须在 PySide6 之前执行
 
 REQUIRED = ("OCC", "PySide6", "asyncua", "numpy")
 EXTRA = ("yaml", "pytest")
@@ -25,22 +29,6 @@ STEP_SYMBOL = "STEPControl_Reader"
 def _force_utf8_stdout() -> None:
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-
-
-def _preload_windows_icu() -> None:
-    """让 Qt6Core 拿到 Windows 系统 ICU，而不是 conda icu 包的同名 DLL。
-
-    conda 的 icu 包在 %PREFIX%/Library/bin 放了 icuuc.dll，而该目录被 conda 的
-    python 自动加入 DLL 搜索路径；Qt6Core.dll 静态导入 icuuc.dll 时会先命中它，
-    因符号集与系统 ICU 不一致而报 ERROR_PROC_NOT_FOUND（WinError 127）。装载器
-    按模块名缓存，故先按名载入系统 ICU 即可满足后续同名请求。
-    """
-    if sys.platform != "win32":
-        return
-    root = os.environ.get("SystemRoot", r"C:\Windows")
-    path = os.path.join(root, "System32", "icuuc.dll")
-    if os.path.exists(path):
-        ctypes.WinDLL(path)
 
 
 def _module_version(module_name: str) -> str:
@@ -82,8 +70,8 @@ def _check_step_reader() -> list[str]:
 
 def main() -> int:
     _force_utf8_stdout()
-    _preload_windows_icu()
     print(f"python     {sys.version.split()[0]}  ({sys.executable})")
+    print(f"ICU 预载   {preload_windows_icu() or '未执行（非 Windows 或系统无 icuuc.dll）'}")
     print("必核四包：")
     failures = _report(REQUIRED)
     print("同批装入的环境依赖：")

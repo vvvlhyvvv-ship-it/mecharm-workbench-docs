@@ -1,0 +1,7 @@
+# vendor 第三方原件必须逐字节保真。
+# 本机 Git 系统级配置 core.autocrlf=true（C:/Program Files/Git/etc/gitconfig），
+# 不加下面这行，checkout 出的 view/vendor/three.module.js 会被转成 CRLF：
+# 1,272,972 B → 1,326,016 B，SHA256 由 76dea815…a495 变成 c6eacae1…bf1f，
+# 于是「按哈希核 vendor 原件」这道控制会假失败（每个 worktree 都会遇到）。
+# three.js 对 CRLF 不敏感，运行不受影响，故这是校验口径问题而非功能问题。
+view/vendor/** -text

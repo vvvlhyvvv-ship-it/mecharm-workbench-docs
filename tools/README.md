@@ -4,7 +4,7 @@
 
 | 路径 | 唯一写者 | 说明 |
 |---|---|---|
-| `smoke.py` | T01 | 环境冒烟：打印 OCC（pythonocc-core）／PySide6／asyncua／numpy 版本，并核 STEP 读取器可导入。⚠️ 内含 Windows 系统 ICU 预载——conda 的 `icu` 包会让 Qt6Core.dll 命中错误的 `icuuc.dll`（WinError 127），原因与处置见该脚本 docstring |
+| `smoke.py` | T01 | 环境冒烟：打印 OCC（pythonocc-core）／PySide6／asyncua／numpy 版本，并核 STEP 读取器可导入。调用 `app/bootstrap.py` 的 `preload_windows_icu()` 做入口引导——conda 的 `icu` 包会让 Qt6Core.dll 命中符号不兼容的 `icuuc.dll`（WinError 127），**任何要 import PySide6 的入口都必须先走该引导**，原因与实测证据见 `app/bootstrap.py` docstring |
 | `config_check.py` | T03 | 配置校验入口 |
 | `lint_no_magic.py` | T03 | 常驻复查①自动化：扫轴参数魔法数字，**其他单不得修改其判定规则** |
 | `e2e_smoke.py` | T10 | 全链路冒烟 |

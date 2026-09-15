@@ -23,22 +23,22 @@
 ### ⚠️ 表中 SHA256 的准确语义与换行转换风险（T01 实测）
 
 **表中 SHA256 ＝ 上游原件字节 ＝ 入库 git blob 字节 ＝ 本单落盘时的工作树字节（三者实测同一值）。**
-但本机 Git **系统级**配置 `C:/Program Files/Git/etc/gitconfig` 里 `core.autocrlf=true`，且仓内**无 `.gitattributes`**，故：
+但本机 Git **系统级**配置 `C:/Program Files/Git/etc/gitconfig` 里 `core.autocrlf=true`，而本单落盘时仓内**尚无 `.gitattributes`**（现已补，见下），故存在两种形态：
 
 | 形态 | 字节数 | SHA256 |
 |---|---|---|
 | 入库 blob（LF，= 上游原件） | 1,272,972 | `76dea8151bc9352aef3528b4262e249b2604f62543828328db978d060d61a495` |
-| **checkout 出的工作树文件（被转 CRLF）** | **1,326,016** | **`c6eacae1ec5fd832160227ca7441311c8b30dee0419af87954fb9df6d105bf1f`** |
+| **加 `.gitattributes` 之前** checkout 出的工作树文件（被转 CRLF） | 1,326,016 | `c6eacae1ec5fd832160227ca7441311c8b30dee0419af87954fb9df6d105bf1f` |
 
-即：**克隆／建 worktree 后直接 `sha256sum view/vendor/three.module.js` 会得到 CRLF 那个值，与表中不符——这不是文件被篡改**，是 Git 换行转换。功能上 three.js 对 CRLF 不敏感，运行不受影响；但"按哈希核 vendor 原件"这道控制会假失败。
+**已处置（2026-09-16 @user 批准）**：仓根已新增 `.gitattributes`，内容 `view/vendor/** -text`，
+对 vendor 目录关闭换行转换。故**现在 checkout 出的工作树文件与入库 blob 逐字节一致，表中 SHA256
+可直接用于校验工作树文件**，CRLF 那一行只作为"若 .gitattributes 被误删会出现什么"的对照留档。
 
-正确校验姿势（比 blob，不比工作树）：
+不依赖 `.gitattributes` 的兜底校验法（比 blob，不比工作树，任何时候都成立）：
 
 ```bash
 git cat-file blob HEAD:view/vendor/three.module.js | sha256sum   # 应得上表 LF 那一行
 ```
-
-**待指挥方裁决**：若要彻底消除该假失败，需在仓根新增 `.gitattributes`（内容 `view/vendor/** -text`）。该文件不在 T01 卡的交付路径清单内，属仓根骨架新增，**本单未自行创建**，按 04 §4.5-② 报备规则留给指挥方定。在此之前，各单一律用上面的 `git cat-file` 口径核 vendor 件。
 
 ### ⚠️ 升级 three.js 前必读（T01 实测约束）
 
