@@ -81,6 +81,7 @@ LIMIT_CASES = [({}, []), ({"L1": 10.0, "L2": 10.4}, []),
 IDENTITY_FRAME = CoordFrame((0.0, 0.0, 0.0), (1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0))
 Y_UP_TO_Z_UP = axis_swap_frame({"x": "+x", "y": "+z", "z": "-y"}, (10.0, 20.0, 30.0))
 TILTED = CoordFrame((-5.0, 0.0, 7.5), (1.0, 0.0, 0.0, 0.0, 0.0, -1.0, 0.0, 1.0, 0.0))
+OBLIQUE = CoordFrame((2.5, -7.5, 11.0), tuple(rotation("z", 30.0)[i] for i in (0, 1, 2, 4, 5, 6, 8, 9, 10)))
 
 
 def _origin(pose):
@@ -147,10 +148,10 @@ def test_frame_rejects_non_orthonormal(spin):
         CoordFrame((0.0, 0.0, 0.0), spin)
 
 
-@pytest.mark.parametrize("frame", [IDENTITY_FRAME, Y_UP_TO_Z_UP, TILTED])
+@pytest.mark.parametrize("frame", [IDENTITY_FRAME, Y_UP_TO_Z_UP, TILTED, OBLIQUE])
 @pytest.mark.parametrize("point", [(0.0, 0.0, 0.0), (1.5, -2.25, 7.0), (1234.5, -678.9, 4321.0)])
 def test_round_trip_error_below_1e_6(frame, point):
-    """用例④：模型↔设备、设备↔场景往返误差 <1e-6（mm）。"""
+    """用例④：往返误差 <1e-6（mm）；`OBLIQUE` 含无理数才真受浮点检验，前三框元素仅 0／±1 无舍入。"""
     assert device_to_model(model_to_device(point, frame), frame) == pytest.approx(point, abs=1e-6)
     assert scene_to_device(device_to_scene(point, frame), frame) == pytest.approx(point, abs=1e-6)
 
