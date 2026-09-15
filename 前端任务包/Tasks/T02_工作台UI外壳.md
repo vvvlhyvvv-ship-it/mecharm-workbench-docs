@@ -6,6 +6,11 @@
 ## 前置阅读
 02 设计方案全文 ｜ 03 架构 §2 §5 ｜ T01 完成
 
+> ⚠️ **入口引导（T01 已交付 `app/bootstrap.py`，本单不必自己写）**：`import app`／`app.*` 已**自动**预载 Windows 系统 ICU，故 `app/shell.py` 等入口**无需任何 ICU shim**，直接 `from PySide6 import …` 即可。
+> **但若从 `app` 包外直接 import PySide6**（独立验证脚本、**PyInstaller 入口**、`tools/` 下临时脚本），**必须显式** `from app.bootstrap import preload_windows_icu`，并**放在 PySide6 导入之前**（`tools/smoke.py` 就是这种写法，可照抄那一行）。
+> **成因（实测）**：conda 的 `icu` 包在 `%PREFIX%\Library\bin` 也放了一份 `icuuc.dll`，而 conda 的 python 启动时自动把该目录加入 DLL 搜索路径 → `Qt6Core.dll`（**静态**导入表含 `icuuc.dll`）先命中它，因符号集与系统 ICU 不一致报 **WinError 127**（`ERROR_PROC_NOT_FOUND`），表现为 `from PySide6 import QtCore` 直接失败；`icu` 是 `libxml2`（OCCT 的 XML 支持链）硬依赖，**不能移除**。
+> ⛔ **禁复制粘贴自写 shim**（唯一写者＝T01，见 04 §4 矩阵该行）；若你新写的入口报 WinError 127，**先查有没有走 `app` 包**，**不要改 `app/bootstrap.py`**。
+
 ## 步骤
 1. `app/shell.py`：主窗体三栏布局（左右栏可折叠，1920×1080 与 1366×768 无横向滚动）
 2. `app/stepbar.py`：五步进度条组件（当前高亮/未达置灰/完成可回看），暴露 `set_step_enabled(n, bool)`
