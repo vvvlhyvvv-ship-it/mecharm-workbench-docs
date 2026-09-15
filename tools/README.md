@@ -1,0 +1,23 @@
+# tools/ — 自家脚本与工具
+
+只读扫描、自检、离线预处理与收口脚本的归属目录。**不属业务码**，不得引入 03 §8 清单外的第三方依赖。
+
+| 路径 | 唯一写者 | 说明 |
+|---|---|---|
+| `smoke.py` | T01 | 环境冒烟：打印 OCC（pythonocc-core）／PySide6／asyncua／numpy 版本，并核 STEP 读取器可导入。⚠️ 内含 Windows 系统 ICU 预载——conda 的 `icu` 包会让 Qt6Core.dll 命中错误的 `icuuc.dll`（WinError 127），原因与处置见该脚本 docstring |
+| `config_check.py` | T03 | 配置校验入口 |
+| `lint_no_magic.py` | T03 | 常驻复查①自动化：扫轴参数魔法数字，**其他单不得修改其判定规则** |
+| `e2e_smoke.py` | T10 | 全链路冒烟 |
+
+新增脚本文件名**须先在该单派单卡内报备**（04 §4.5-②）。
+
+## 环境清单再生成（T01 实测口径，改环境后照此重出）
+
+```bash
+conda env export -n mecharm --file environment.yml
+python -m pip list --format=freeze > requirements.lock.txt
+```
+
+⚠️ **`requirements.lock.txt` 不用 `pip freeze`**：本环境里 numpy／packaging／pyparsing／svgwrite
+是 conda 装的，`pip freeze` 会把它们写成 `xxx @ file:///D:/bld/...`（conda 构建机路径，本机不存在），
+换机器 `pip install -r` 直接失败。`pip list --format=freeze` 输出干净的 `name==version`，实测 0 条 `file://`。
