@@ -15,15 +15,17 @@
    - **coupling**：X3 标 `{type: ratio, master: 二级筒轴, ratio: 2}`（三级筒位置 = 主动轴 × 2）；龙门双驱类同步轴用 `{type: sync, group, sync_tol_mm}`
    - **limits**：含 `collision_envelope_mm`（T08 保守包络用）与 `tessellate_deflection_mm`（T05 弦高容差用），初值按 03 §4 口径配置
    - links、opcua 节点表（节点 ID 按 S-1 契约 DB 布局自造，标注"模拟期占位，Q 回执后改此文件"）
-2. `core/config.py`：`load_machine(path:str)->MachineConfig`，dataclass 定型；缺字段/类型错/行程 min≥max/direction 非 ±1 → 抛 `ConfigError` 且消息列出**全部**问题项；**`pending: true` 的轴只告警不拒绝**（回执前允许带着占位跑仿真，告警列出全部待回执轴）
+   - **paths**：`cache_dir` —— 缓存与离线资产库根目录，**默认 `%LOCALAPPDATA%\mecharm\cache`（仓外绝对路径）**；**严禁默认落仓内**（2026-09-15 第六轮审计新增：远端为**公开仓**，缓存内是甲方模型的几何真身，见 03 §4 与 04 §7.1-10）
+2. `core/config.py`：`load_machine(path:str)->MachineConfig`，dataclass 定型；缺字段/类型错/行程 min≥max/direction 非 ±1 → 抛 `ConfigError` 且消息列出**全部**问题项；**`pending: true` 的轴只告警不拒绝**（回执前允许带着占位跑仿真，告警列出全部待回执轴）；**`paths.cache_dir` 为相对路径、或解析后落在仓根目录内 → 抛 `ConfigError`**（涉密边界，见 03 §4 口径段：**默认值必须是仓外绝对路径**）
 3. `tools/config_check.py` 命令行校验器（现场排障用）：`python tools/config_check.py config/machine.yaml`
-4. pytest：合法样例过；6 类非法样例逐项拒（tests/fixtures/ 造）；**pending 占位轴告警用例**（告警列出轴名、不抛错）；**modes 子集校验用例**（模式轴子集必须 ⊆ axes 且轨迹级轴计数 ≤9）；**ratio 耦合校验用例**（ratio>0 且 master 必须存在于 axes）
+4. pytest：合法样例过；6 类非法样例逐项拒（tests/fixtures/ 造）；**pending 占位轴告警用例**（告警列出轴名、不抛错）；**modes 子集校验用例**（模式轴子集必须 ⊆ axes 且轨迹级轴计数 ≤9）；**ratio 耦合校验用例**（ratio>0 且 master 必须存在于 axes）；**cache_dir 仓内路径拒载用例**（相对路径 `cache/` 与仓内绝对路径各一例）
 
 ## 完成标准
 - [ ] 合法样例加载成功且字段可访问（贴 REPL 输出）
 - [ ] 非法用例 6/6 报错且消息含字段名
 - [ ] 22 轴样例带 role/modes/ratio 耦合；pending 占位轴告警列出、不拒绝启动
 - [ ] grep 全仓无轴参数魔法数字（travel/offset 只存在于 yaml；此后每单验收常驻复查，见 99 验收流程）
+- [ ] `paths.cache_dir` 默认值为**仓外绝对路径**（`%LOCALAPPDATA%\mecharm\cache`）；仓内路径（相对路径／仓根前缀）样例**被拒载**且消息含字段名（贴输出）
 - [ ] commit：`feat(T03): 参数体系`
 
 ## 禁止事项
