@@ -16,6 +16,18 @@
 
 ## 步骤
 1. 点表落地：从 machine.yaml `opcua:` 节创建 Server 节点树（DB_SW_to_PLC / DB_PLC_to_SW 镜像结构，符号名访问，禁偏移直写）
+   > **⚠️ G17 节点表扩表（2026-09-16 裁决，详条见 04 §7.2-G17、派单卡见 04 §6.4 T09）**：原节点表只有
+   > `read_nodes: {axis_pos[8], status, heartbeat}`／`write_nodes: {cmd, seg_count, seg_array}`，**覆盖不到契约 §9.1
+   > 步骤 1/2/4/6/7 所需的七个符号**；且校验器 `validate.py` 的 `_nodes()` **只按 `schema.py` 的 SPEC 遍历** →
+   > **在 yaml 里自行加键不报错、被静默丢弃**，实现会话无法自救。**裁决＝扩表**（03 §4 已改）：
+   > `read_nodes` 增 `axis_vel[8]`／`ack`／`alarm_word`／`seq_id`／`cur_seg`，`write_nodes` 增 `seq_id`／`speed_override`。
+   > **已授权本单代 T03 改**：`core/config/{schema,validate,loader}.py`＋`config/machine.yaml`（**只 `opcua:` 节**）＋
+   > `tests/fixtures/` **全部 8 个样例**。硬约束：新键**必填**；`axis_vel` 节点数**同受 `PACK_PROFILE_AXIS_COUNT` 约束**；
+   > **`tests/test_config.py` 24 用例全绿且不改断言**；`lint_no_magic.py` 判定规则不得动。
+   > ⛔ **不得写死符号名**（违反完成标准第 5 条）、**不得降级为 Status 位＋超时推断**（会让步骤 5"收到原因码"不可达）。
+   > **本轮不加** `mode_mask`／`enable_mask`／`sync_err`／`timestamp`（理由见 G17）→ 需要时停下汇报。
+   > **`seg_array`**：本期按**单节点写打包 ByteString（10×56＝560 B）**、禁逐变量写，假设进代码注释＋汇报。
+   > **扩表不阻塞其余部分**：节点树骨架／段打包／20 Hz 回读／离线判定＋重连＋看门狗／非 Ack 用例可先干。
 2. 模拟器行为：监听命令字→按 S-1 第 9 章握手（校验→接受→执行→完成/异常，9 步时序+超时表照契约执行）→虚拟轴运动按梯形速度规划，20Hz 更新回读区；支持注入异常（拒绝/超时/断线）供 T10 测试
 3. 客户端：`connect(endpoint,cfg)`，Subscription 20Hz 回读→`on_frames` 回调；写接口 `write_segments(path)`；断线自动重连+stale 看门狗（数据超时判离线）
 4. 安全策略：默认 None + 用户名占位（**电Q-2（OPC UA 接入参数/安全策略）**回执后只改配置不改码——策略可切换设计）
