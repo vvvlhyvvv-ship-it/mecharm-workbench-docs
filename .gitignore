@@ -1,1 +1,15 @@
 node_modules/
+
+# 会话/工具产物（不得入库，勿推远端）
+.workbuddy/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+.pytest_cache/
+build/
+dist/
+*.log
