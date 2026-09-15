@@ -1,0 +1,55 @@
+/* view/css/app.css — 视口页样式（02 设计方案 §4 视觉硬指标）。
+ * index.html 只放骨架，样式一律在此；深色底防白屏，正文 ≥14px。 */
+
+:root {
+  --bg-deep: #16202a;
+  --bg-card: #22303d;
+  --border: #2c3d4d;
+  --text: #e6edf3;
+  --text-dim: #9fb0bd;
+  --accent: #2f6feb;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  background-color: var(--bg-deep);
+  color: var(--text);
+  font-family: "Microsoft YaHei", "Segoe UI", sans-serif;
+  font-size: 14px;
+}
+
+#viewport {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+}
+
+.card {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 32px 40px;
+  text-align: center;
+  max-width: 480px;
+}
+
+.card h1 {
+  font-size: 18px;
+  margin: 0 0 12px;
+}
+
+.card p {
+  margin: 6px 0;
+}
+
+.dim {
+  color: var(--text-dim);
+}
+
+#bridge-state.ready {
+  color: var(--accent);
+}

@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>三维视口</title>
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+  <!-- T02 外壳阶段：只放深色空场景卡，避免白屏；几何/拾取/路径由 T05-T07 接入 -->
+  <main id="viewport">
+    <section id="empty-scene" class="card">
+      <h1>三维视口</h1>
+      <p>内核未接入 · 工作台外壳（T02）</p>
+      <p class="dim">模型导入与显示将由 T05 接入</p>
+      <p id="bridge-state" class="dim">桥：未连接</p>
+    </section>
+  </main>
+
+  <!-- 脚本注册行（qwebchannel.js 为 QtWebEngine 内置离线资源，非 CDN） -->
+  <script src="qrc:///qtwebchannel/qwebchannel.js"></script>
+  <script type="module" src="js/bridge.js"></script>
+</body>
+</html>
