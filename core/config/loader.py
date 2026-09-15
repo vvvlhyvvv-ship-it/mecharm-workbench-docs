@@ -12,7 +12,8 @@ from collections.abc import Mapping, Sequence
 
 import yaml
 
-from core.config.schema import SECTIONS, Axis, ConfigError, MachineConfig
+from core.config.schema import (PACK_PROFILE_AXIS_COUNT, SECTIONS, Axis, ConfigError,
+                                MachineConfig, OpcUa)
 from core.config.validate import (axes_section, limits_section, links_section, machine_section,
                                   modes_section, opcua_section, paths_section)
 
@@ -49,6 +50,25 @@ def _check_coupling_masters(problems: list[str], axes: Mapping[str, Axis]) -> No
                             f"不在 axes 表内")
 
 
+def _check_pack_profile(problems: list[str], opcua: OpcUa | None) -> None:
+    """回读 axis_pos 节点数必须等于 pack_profile 对应的 Pos[] 长度（契约 §5.2）。
+
+    与 _check_coupling_masters 同属跨字段一致性校验：单看节点表、单看 pack_profile 都合法，
+    只有对着看才知道错——而这类错的后果是**下发／回读字节布局与 PLC 对不上**，故做成拒载，
+    把 yaml 注释里那句「禁只改一边」变成机器判据。对照表记 None 的 profile（V1.3 未冻结）跳过。
+    """
+    if opcua is None:
+        return
+    expected = PACK_PROFILE_AXIS_COUNT.get(opcua.pack_profile)
+    if expected is None:
+        return
+    count = len(opcua.read_nodes["axis_pos"])
+    if count != expected:
+        problems.append(f"opcua.read_nodes.axis_pos: pack_profile={opcua.pack_profile} 应为 "
+                        f"{expected} 个节点（契约 §5.2 的 Pos[] 长度），实得 {count} 个"
+                        f"——pack_profile 与节点表禁只改一边")
+
+
 def _pending_warnings(axes: Mapping[str, Axis]) -> tuple[str, ...]:
     """pending 占位轴 → 告警文本（列出全部轴名，**不拒绝启动**；T03 卡步骤 2）。"""
     pending = [axis.id for axis in axes.values() if axis.pending]
@@ -77,6 +97,7 @@ def load_machine(path: str) -> MachineConfig:
     opcua = opcua_section(problems, data["opcua"])
     paths = paths_section(problems, data["paths"])
     _check_coupling_masters(problems, axes)
+    _check_pack_profile(problems, opcua)
     if problems:
         raise ConfigError(_format(path, problems))
     return MachineConfig(machine, axes, modes, links, limits, opcua, paths,

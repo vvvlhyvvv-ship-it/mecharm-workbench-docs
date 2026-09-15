@@ -28,7 +28,10 @@ opcua:
   ns_index: 3
   pack_profile: v1_2_8axis
   read_nodes:
-    axis_pos: ['ns=3;s="DB_PLC_to_SW"."Pos[0]"']
+    axis_pos: ['ns=3;s="DB_PLC_to_SW"."Pos[0]"', 'ns=3;s="DB_PLC_to_SW"."Pos[1]"',
+               'ns=3;s="DB_PLC_to_SW"."Pos[2]"', 'ns=3;s="DB_PLC_to_SW"."Pos[3]"',
+               'ns=3;s="DB_PLC_to_SW"."Pos[4]"', 'ns=3;s="DB_PLC_to_SW"."Pos[5]"',
+               'ns=3;s="DB_PLC_to_SW"."Pos[6]"', 'ns=3;s="DB_PLC_to_SW"."Pos[7]"']
     status: 'ns=3;s="DB_PLC_to_SW"."Status"'
     heartbeat: 'ns=3;s="DB_PLC_to_SW"."Heartbeat"'
   write_nodes:

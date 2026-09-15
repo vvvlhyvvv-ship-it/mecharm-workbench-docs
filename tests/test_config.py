@@ -140,6 +140,29 @@ def test_cache_dir_in_repo_rejected(tmp_path: pathlib.Path) -> None:
     assert "不得落在仓根目录内" in message
 
 
+def test_axis_pos_count_must_match_pack_profile(tmp_path: pathlib.Path) -> None:
+    """节点表与 pack_profile 禁只改一边：少一个 Pos[] 节点即拒载（契约 §5.2 字节布局）。"""
+    def drop_one(data: dict) -> None:
+        nodes = data["opcua"]["read_nodes"]["axis_pos"]
+        del nodes[-1]
+
+    message = _load_error(_write_variant(tmp_path, drop_one))
+    assert "opcua.read_nodes.axis_pos" in message
+    assert "禁只改一边" in message
+    assert "共 1 项问题" in message, f"应只报这一处，实得：\n{message}"
+
+
+def test_unfrozen_pack_profile_skips_node_count(tmp_path: pathlib.Path) -> None:
+    """对照表记 None 的 profile（V1.3 未冻结）不校验节点数，避免冻结前误拒。"""
+    def to_v13(data: dict) -> None:
+        data["opcua"]["pack_profile"] = "v1_3_24axis"
+        data["opcua"]["read_nodes"]["axis_pos"] = ['ns=3;s="DB_PLC_to_SW"."Pos[0]"']
+
+    cfg = load_machine(str(_write_variant(tmp_path, to_v13)))
+    assert cfg.opcua.pack_profile == "v1_3_24axis"
+    assert len(cfg.opcua.read_nodes["axis_pos"]) == 1
+
+
 # --------------------------------------------------------------------------
 # ③ pending 占位轴：只告警不拒绝
 # --------------------------------------------------------------------------
