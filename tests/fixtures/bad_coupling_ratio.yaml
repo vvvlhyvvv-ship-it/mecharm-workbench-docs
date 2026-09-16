@@ -38,11 +38,21 @@ opcua:
                'ns=3;s="DB_PLC_to_SW"."Pos[2]"', 'ns=3;s="DB_PLC_to_SW"."Pos[3]"',
                'ns=3;s="DB_PLC_to_SW"."Pos[4]"', 'ns=3;s="DB_PLC_to_SW"."Pos[5]"',
                'ns=3;s="DB_PLC_to_SW"."Pos[6]"', 'ns=3;s="DB_PLC_to_SW"."Pos[7]"']
+    axis_vel: ['ns=3;s="DB_PLC_to_SW"."Vel[0]"', 'ns=3;s="DB_PLC_to_SW"."Vel[1]"',
+               'ns=3;s="DB_PLC_to_SW"."Vel[2]"', 'ns=3;s="DB_PLC_to_SW"."Vel[3]"',
+               'ns=3;s="DB_PLC_to_SW"."Vel[4]"', 'ns=3;s="DB_PLC_to_SW"."Vel[5]"',
+               'ns=3;s="DB_PLC_to_SW"."Vel[6]"', 'ns=3;s="DB_PLC_to_SW"."Vel[7]"']
     status: 'ns=3;s="DB_PLC_to_SW"."Status"'
     heartbeat: 'ns=3;s="DB_PLC_to_SW"."Heartbeat"'
+    ack: 'ns=3;s="DB_PLC_to_SW"."Ack"'
+    alarm_word: 'ns=3;s="DB_PLC_to_SW"."AlarmWord"'
+    seq_id: 'ns=3;s="DB_PLC_to_SW"."SeqID"'
+    cur_seg: 'ns=3;s="DB_PLC_to_SW"."CurSeg"'
   write_nodes:
     cmd: 'ns=3;s="DB_SW_to_PLC"."Cmd"'
+    seq_id: 'ns=3;s="DB_SW_to_PLC"."SeqID"'
     seg_count: 'ns=3;s="DB_SW_to_PLC"."SegCount"'
+    speed_override: 'ns=3;s="DB_SW_to_PLC"."SpeedOverride"'
     seg_array: 'ns=3;s="DB_SW_to_PLC"."Seg"'
   publish_interval_ms: 50
 

@@ -174,11 +174,17 @@ limits:
 #   契约 §4.1 已声明实际 DB 编号待确认（契约体系 Q-7）→ **Q 回执后改此文件不改代码**。
 #   endpoint_url 固定 127.0.0.1：契约冻结前只连本机模拟器（04 §4 矩阵该行；T09）。
 #   security_policy: None ＝无加密，模拟期口径；真机安全策略待回执。
-#   read_nodes.axis_pos 为 **8 个**节点，与 pack_profile=v1_2_8axis 一致
-#     （契约 §6.1 `Pos = ARRAY[0..7]`）；V1.3 扩容后与 profile 同步改，**禁只改一边**——
+#   read_nodes.axis_pos／axis_vel **各为 8 个**节点，与 pack_profile=v1_2_8axis 一致
+#     （契约 §6.1 的 `Pos`／`Vel` 同为 `ARRAY[0..7]`）；V1.3 扩容后与 profile 同步改，**禁只改一边**——
 #     这条已由加载器强制（对照表＝`core/config/schema.py` 的 `PACK_PROFILE_AXIS_COUNT`，
-#     节点数不符即拒载），不再只靠本注释。V1.3 未冻结故其对照值暂记 None（不校验），
-#     契约 V1.3 冻结后回填数字即自动生效。
+#     **两键一并校验**、节点数不符即拒载并点名是哪一张表），不再只靠本注释。V1.3 未冻结故其
+#     对照值暂记 None（不校验），契约 V1.3 冻结后回填数字即自动生效。
+#   ack／alarm_word／seq_id（回显）／cur_seg 与 write_nodes 的 seq_id／speed_override 系
+#     2026-09-16 **G17 裁决**补入：契约 §9.1 步骤 1/2/4/6/7 的握手须按符号名读写这些量，
+#     原三键表覆盖不到（详条见 04 §7.2-G17）。
+#     ⚠️ 本轮**不加** mode_mask／enable_mask／sync_err／timestamp（契约 §6.1 偏移 76/77/80/84）：
+#     无消费方，且 sync_err 按契约 §6.4 bit3「电Q-9 确认前不启用」、EnableMask 能否加宽吞并
+#     Reserved2 是契约 V1.3 的 @user 悬置项（CR-2026-03 §三-5）→ 留白；需要时**先停下汇报，不许自行加**。
 #   publish_interval_ms: 50 ＝ 20 Hz 回读（T09 口径）。
 # ─────────────────────────────────────────────────────────────────────────────
 opcua:
@@ -196,11 +202,26 @@ opcua:
       - 'ns=3;s="DB_PLC_to_SW"."Pos[5]"'
       - 'ns=3;s="DB_PLC_to_SW"."Pos[6]"'
       - 'ns=3;s="DB_PLC_to_SW"."Pos[7]"'
+    axis_vel:
+      - 'ns=3;s="DB_PLC_to_SW"."Vel[0]"'
+      - 'ns=3;s="DB_PLC_to_SW"."Vel[1]"'
+      - 'ns=3;s="DB_PLC_to_SW"."Vel[2]"'
+      - 'ns=3;s="DB_PLC_to_SW"."Vel[3]"'
+      - 'ns=3;s="DB_PLC_to_SW"."Vel[4]"'
+      - 'ns=3;s="DB_PLC_to_SW"."Vel[5]"'
+      - 'ns=3;s="DB_PLC_to_SW"."Vel[6]"'
+      - 'ns=3;s="DB_PLC_to_SW"."Vel[7]"'
     status: 'ns=3;s="DB_PLC_to_SW"."Status"'
     heartbeat: 'ns=3;s="DB_PLC_to_SW"."Heartbeat"'
+    ack: 'ns=3;s="DB_PLC_to_SW"."Ack"'
+    alarm_word: 'ns=3;s="DB_PLC_to_SW"."AlarmWord"'
+    seq_id: 'ns=3;s="DB_PLC_to_SW"."SeqID"'
+    cur_seg: 'ns=3;s="DB_PLC_to_SW"."CurSeg"'
   write_nodes:
     cmd: 'ns=3;s="DB_SW_to_PLC"."Cmd"'
+    seq_id: 'ns=3;s="DB_SW_to_PLC"."SeqID"'
     seg_count: 'ns=3;s="DB_SW_to_PLC"."SegCount"'
+    speed_override: 'ns=3;s="DB_SW_to_PLC"."SpeedOverride"'
     seg_array: 'ns=3;s="DB_SW_to_PLC"."Seg"'
   publish_interval_ms: 50
 

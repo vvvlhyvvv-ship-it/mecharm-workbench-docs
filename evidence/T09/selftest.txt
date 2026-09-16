@@ -1,0 +1,95 @@
+========================================================================
+T09 双进程自测取证　2026-09-16 11:10:37
+  python 3.11.16 @ D:\Miniforge3\envs\mecharm\python.exe
+  配置 D:\ZCode项目\多功能机械臂软件-wt\t09\config\machine.yaml（pack_profile=v1_2_8axis，周期 50.0 ms，ns=3）
+  所选节：A、B、C、D、E、F
+
+[A] 段打包（pack_profile 开关 → struct.calcsize 实算）
+  pack_profile = v1_2_8axis，槽位 = 8 个，struct = >4B8f4f1i
+  段长实测 = 56 B；整批 = 560 B = 10 段 × 56 B
+  第 1 段头 4 B（SegType／MotionMode／BlendMode／Reserved1）= 00 00 00 00
+  第 1 段前 6 个轴位 REAL = 42 f0 00 00 41 f0 00 00 c1 70 00 00 00 00 00 00 42 34 00 00 41 20 00 00
+  第 1 段第 6–7 槽位（本段未驱动）= 00 00 00 00 00 00 00 00 → 全 0 = True
+  第 3–10 段（未用段）共 448 B → 全 0 = True
+  逆运算核对：解回第 1 段 pos = (120.0, 30.0, -15.0, 0.0, 45.0, 10.0, 0.0, 0.0)
+  → [PASS] 段长 56 B／整批 560 B／未用轴位与未用段全 0
+  子进程：python.exe -m comm.simulator opc.tcp://127.0.0.1:47800 --config machine.yaml
+  客户端已连 opc.tcp://127.0.0.1:47800，链路态 = online
+
+[B] 双进程回读频率：客户端读模拟器 60 s
+  收帧 1199 帧／窗口 60.032 s（标称 20.0 Hz）；心跳 2→1200（每周期 +1，§9.1 步骤 7）
+  判据＝回归斜率（心跳 对 客户端时刻，全 1199 点）→ **20.0103 Hz**；通过线 20 − 0.01（量具容差）＝ 19.99 Hz
+  对照：端点法 20.0187 Hz、计数法 19.9727 Hz、卡面 10 s 子窗口斜率 19.9773 Hz
+  帧间隔 最小／中位／最大 = 0.0／47.0／110.0 ms；服务端扫描落后告警 0 次（不补扫，故会真少几帧）
+  服务端自计（只用服务端钟、不经推送）：扫描自计：1200 周期／60.000 s → 20.0000 Hz（服务端钟，不含推送抖动；落后 0 次）
+  → [PASS] 实测 20.0103 Hz ≥ 通过线 19.99 Hz（阈值 20 Hz 减量具容差），链路态 online
+
+[C] 九步握手：下发 2 段（倍率 50 %）→ LOAD → START → ST_DONE
+  用时 2.97 s；SeqID=1 CurSeg=1 status=0x90 heartbeat=1260
+  回读 Pos = (240.0, -15.0, 30.0, 0.0, 90.0, -20.0, 0.0, 0.0)
+  目标 Pos = (240.0, -15.0, 30.0, 0.0, 90.0, -20.0)（其后 2 个槽位未驱动，应为 0）
+  回读 Vel = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)（DONE 时应全 0）
+  → [PASS] ST_DONE=True，6 个驱动轴位到达目标（误差 ≤0.001 mm）＝True，未驱动槽位为 0＝True，速度归零＝True
+
+[E] 断进程判离线：kill 模拟器子进程后计时
+  判离线用时 **4.58 s**（阈值 5.0 s），状态回调序列 = ['stale', 'offline']
+  降级期间 last_frame 原样保留、不外推：帧数停在 1260，末帧 Pos = (240.0, -15.0, 30.0, 0.0, 90.0, -20.0, 0.0, 0.0)
+  → [PASS] 4.58 s 内判 OFFLINE 并回调（阈值 5.0 s）
+  ── 模拟器子进程日志（13 行）──
+    | 11:10:39.254 INFO comm.plc_nodes: 镜像节点树已建：上行 8 个键／22 个节点，下发 5 个键，整批段数组 560 B
+    | 11:10:39.254 WARNING asyncua.server.server: No signing policy available, user certificate cannot get verified
+    | 11:10:39.254 WARNING asyncua.server.server: No encrypting policy available, password may get transferred in plaintext
+    | 11:10:39.257 INFO __main__: PLC 模拟器已起 opc.tcp://127.0.0.1:47800：ns=3，槽位 8 个，段长实测 56 B，周期 50 ms
+    | 11:10:49.256 INFO __main__: 扫描自计：200 周期／10.000 s → 20.0000 Hz（服务端钟，不含推送抖动；落后 0 次）
+    | 11:10:59.268 INFO __main__: 扫描自计：400 周期／20.016 s → 19.9840 Hz（服务端钟，不含推送抖动；落后 0 次）
+    | 11:11:09.270 INFO __main__: 扫描自计：600 周期／30.016 s → 19.9893 Hz（服务端钟，不含推送抖动；落后 0 次）
+    | 11:11:19.260 INFO __main__: 扫描自计：800 周期／40.000 s → 20.0000 Hz（服务端钟，不含推送抖动；落后 0 次）
+    | 11:11:29.265 INFO __main__: 扫描自计：1000 周期／50.000 s → 20.0000 Hz（服务端钟，不含推送抖动；落后 0 次）
+    | 11:11:39.259 INFO __main__: 扫描自计：1200 周期／60.000 s → 20.0000 Hz（服务端钟，不含推送抖动；落后 0 次）
+    | 11:11:39.368 INFO comm.plc_logic: 装载通过：2 段，总时长 2.750 s，段长 56 B
+    | 11:11:39.461 INFO comm.plc_logic: 启动：2 段，预计 2.750 s
+    | 11:11:42.215 INFO comm.plc_logic: 轨迹结束：2 段跑完，终点 [240.0, -15.0, 30.0, 0.0, 90.0, -20.0, 0.0, 0.0]
+
+[D] 注入拒绝异常：子进程 --fault reject，客户端下发同一条路径
+  子进程：python.exe -m comm.simulator opc.tcp://127.0.0.1:49672 --config machine.yaml --fault reject
+  客户端收到：装载被拒（SeqID=1）：数据越界
+  原因码（§6.4 报警字）= 0x0020 → 中文说明 = 数据越界
+  → [PASS] 被拒且带原因位：数据越界
+  ── 模拟器子进程日志（6 行）──
+    | 11:11:49.035 INFO comm.plc_nodes: 镜像节点树已建：上行 8 个键／22 个节点，下发 5 个键，整批段数组 560 B
+    | 11:11:49.035 WARNING asyncua.server.server: No signing policy available, user certificate cannot get verified
+    | 11:11:49.035 WARNING asyncua.server.server: No encrypting policy available, password may get transferred in plaintext
+    | 11:11:49.037 INFO __main__: PLC 模拟器已起 opc.tcp://127.0.0.1:49672：ns=3，槽位 8 个，段长实测 56 B，周期 50 ms
+    | 11:11:49.037 INFO comm.plc_logic: 注入故障 reject（alarm=0x0020，cycles=1）
+    | 11:11:49.136 INFO comm.plc_logic: 装载被拒：AlarmWord=0x0020
+
+[F] 换点表零改码：14 组改名后子进程复跑
+  改名后的 NodeId（取自加载结果，非手抄；两张表分开遍历——「seq_id」两边都有同名键）：
+    axis_pos    ns=3;s="DB_Auf"."P[0]" …（8 个）
+    axis_vel    ns=3;s="DB_Auf"."V[0]" …（8 个）
+    status      ns=3;s="DB_Auf"."Zustand"（1 个）
+    heartbeat   ns=3;s="DB_Auf"."Puls"（1 个）
+    ack         ns=3;s="DB_Auf"."Quitt"（1 个）
+    alarm_word  ns=3;s="DB_Auf"."Alarme"（1 个）
+    seq_id      ns=3;s="DB_Auf"."Folge"（1 个）
+    cur_seg     ns=3;s="DB_Auf"."SegmentNr"（1 个）
+    cmd         ns=3;s="DB_Ab"."Befehl"（1 个）
+    seq_id      ns=3;s="DB_Ab"."Folge"（1 个）
+    seg_count   ns=3;s="DB_Ab"."Anzahl"（1 个）
+    speed_override ns=3;s="DB_Ab"."Ueberfahrt"（1 个）
+    seg_array   ns=3;s="DB_Ab"."Segmente"（1 个）
+  子进程：python.exe -m comm.simulator opc.tcp://127.0.0.1:49678 --config machine_swapped.yaml
+  改名点表下 2 s 收帧 97 个，握手到 ST_DONE（CurSeg=1）
+  ── 模拟器子进程日志（7 行）──
+    | 11:11:51.297 INFO comm.plc_nodes: 镜像节点树已建：上行 8 个键／22 个节点，下发 5 个键，整批段数组 560 B
+    | 11:11:51.297 WARNING asyncua.server.server: No signing policy available, user certificate cannot get verified
+    | 11:11:51.297 WARNING asyncua.server.server: No encrypting policy available, password may get transferred in plaintext
+    | 11:11:51.300 INFO __main__: PLC 模拟器已起 opc.tcp://127.0.0.1:49678：ns=3，槽位 8 个，段长实测 56 B，周期 50 ms
+    | 11:11:53.363 INFO comm.plc_logic: 装载通过：2 段，总时长 2.750 s，段长 56 B
+    | 11:11:53.411 INFO comm.plc_logic: 启动：2 段，预计 2.750 s
+    | 11:11:56.145 INFO comm.plc_logic: 轨迹结束：2 段跑完，终点 [240.0, -15.0, 30.0, 0.0, 90.0, -20.0, 0.0, 0.0]
+  → [PASS] 另一份点表、代码零改动，回读照跑（详见子进程日志）
+
+========================================================================
+  A＝PASS　B＝PASS　C＝PASS　D＝PASS　E＝PASS　F＝PASS
+结论：6 节全 PASS（数字均为实测，非估算）　取证物：D:\ZCode项目\多功能机械臂软件-wt\t09\evidence\T09\selftest.txt
