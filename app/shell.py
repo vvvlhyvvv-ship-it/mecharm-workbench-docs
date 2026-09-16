@@ -11,6 +11,7 @@ T02 阶段内核未接入，全部用占位数据；本模块只做布局 + 外�
 
 from __future__ import annotations
 
+import pathlib
 import sys
 
 from PySide6.QtWidgets import (
@@ -25,6 +26,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt
 
+from app.assemblytree import AssemblyTree
 from app.bridge import Bridge
 from app.mode import ModeBadge, OnlineLight, WorkModeSelector
 from app.panel import Panel
@@ -47,6 +49,10 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("机械臂三维示教工作台")
         self.resize(1440, 860)
         self.setMinimumSize(LEFT_WIDTH + CENTER_MIN + RIGHT_WIDTH, 600)
+        self.setAcceptDrops(True)              # 拖放模型文件到窗口即导入（02 §2 步骤①）
+        self._mode_ok = False                  # 已选定工作模式
+        self._brep_ok = False                  # 已导入实体模型；面片模型保持 False → ②-⑤锁定
+        self._last: object = None              # 最近导入结果（含 parts.face_index，留存供 T06）
 
         self.bridge = Bridge(self)
         self.stepbar = StepBar()
@@ -54,6 +60,7 @@ class MainWindow(QMainWindow):
         self.badge = ModeBadge()
         self.light = OnlineLight()
         self.viewpane = ViewPane()
+        self.viewpane.view().setAcceptDrops(False)  # 让拖放冒泡到主窗（WebEngine 默认吞 drop）
         self.panel = Panel()
         self.statusbar = StatusBar()
 
@@ -106,12 +113,9 @@ class MainWindow(QMainWindow):
         box.setSpacing(8)
         title = QLabel("装配树")
         title.setObjectName("PaneTitle")
-        body = QLabel("（T05 接入装配树）")
-        body.setObjectName("PlaceholderBody")
-        body.setWordWrap(True)
+        self.tree = AssemblyTree()
         box.addWidget(title)
-        box.addWidget(body)
-        box.addStretch(1)
+        box.addWidget(self.tree, 1)
         return pane
 
     def _build_splitter(self) -> QWidget:
@@ -137,6 +141,10 @@ class MainWindow(QMainWindow):
             lambda reason: self.statusbar.log(reason.replace("\n", " "))
         )
         self.viewpane.view().loadFinished.connect(self._on_view_load)
+        self.panel.step1.imported.connect(self._on_imported)
+        self.panel.step1.failed.connect(lambda msg: self.statusbar.log(f"导入未成功：{msg}"))
+        self.tree.selected.connect(self._on_tree_selected)
+        self.tree.focused.connect(self._on_tree_focused)
         self.panel.set_step(1)
 
     def _on_step_clicked(self, n: int) -> None:
@@ -145,9 +153,10 @@ class MainWindow(QMainWindow):
         self.statusbar.log(f"切换到 {STEP_LABELS[n - 1]}")
 
     def _on_mode_committed(self, name: str) -> None:
-        for n in (2, 3, 4, 5):
-            self.stepbar.set_step_enabled(n, True)
-        self.statusbar.log(f"工作模式：{name}，步骤②-⑤已解锁")
+        self._mode_ok = True
+        self._refresh_unlock()
+        tail = "，步骤②-⑤已解锁" if self._brep_ok else "（待导入实体模型后解锁步骤②-⑤）"
+        self.statusbar.log(f"工作模式：{name}{tail}")
 
     def _on_mode_switched(self, name: str) -> None:
         self.bridge.call_view("invalidate", {"mode": name})
@@ -162,6 +171,39 @@ class MainWindow(QMainWindow):
         self.bridge.set_ready(True)
         self.statusbar.log("视口就绪，发送 ping")
         self.bridge.ping(1)
+
+    def _refresh_unlock(self) -> None:
+        # 步骤②-⑤需“已选工作模式 且 已导入实体模型”同时成立（面片模型不可编程）
+        ok = self._mode_ok and self._brep_ok
+        for n in (2, 3, 4, 5):
+            self.stepbar.set_step_enabled(n, ok)
+
+    def _on_imported(self, res: object) -> None:
+        asm = res["asm"]
+        self._last = res
+        self.bridge.call_view("mesh.load", {"reset": True, "parts": res["payload"]})
+        self.tree.populate(asm.tree_payload())
+        self.stepbar.mark_completed(1)        # 红线④：步骤①导入成功即标记完成
+        self._brep_ok = bool(asm.is_brep)
+        self._refresh_unlock()
+        name = pathlib.Path(asm.source_path).name
+        kind = "实体模型 ✓" if asm.is_brep else "面片模型 ✗（不能用于编程，步骤②保持锁定）"
+        self.statusbar.log(f"已导入 {name}，{asm.stats.get('parts', 0)} 个零件，{kind}")
+
+    def _on_tree_selected(self, ids: list) -> None:
+        self.bridge.call_view("hl.set", {"ids": ids, "semantic": "ok"})
+
+    def _on_tree_focused(self, ids: list) -> None:
+        self.bridge.call_view("hl.set", {"ids": ids, "semantic": "ok", "focus": True})
+
+    def dragEnterEvent(self, event) -> None:
+        if event.mimeData().hasUrls():
+            event.acceptProposedAction()
+
+    def dropEvent(self, event) -> None:
+        urls = event.mimeData().urls()
+        if urls:
+            self.panel.step1.start_import(urls[0].toLocalFile())
 
     def _toggle_left(self) -> None:
         vis = not self._left_pane.isVisible()

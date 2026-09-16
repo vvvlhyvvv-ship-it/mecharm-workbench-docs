@@ -82,6 +82,30 @@ _QSS = Template(
     #PlaceholderTitle { font-size: ${step_px}px; font-weight: bold; color: $text; }
     #PlaceholderBody { color: $text_dim; }
 
+    /* ---- 左栏装配树 ---- */
+    QTreeWidget {
+        background-color: $bg_card; color: $text; border: 1px solid $border;
+        border-radius: 6px; outline: none;
+    }
+    QTreeWidget::item { min-height: 26px; }
+    QTreeWidget::item:hover { background-color: $border; }
+    QTreeWidget::item:selected { background-color: $accent; color: #ffffff; }
+    QHeaderView::section {
+        background-color: $bg_panel; color: $text_dim; border: none; padding: 4px 8px;
+    }
+
+    /* ---- 步骤①导入结果行：实体绿 / 面片红 / 进行中灰（颜色+文字双通道） ---- */
+    QLabel[result="brep"] { color: $ok; font-weight: bold; }
+    QLabel[result="mesh"] { color: $deny; font-weight: bold; }
+    QLabel[result="busy"] { color: $text_dim; }
+
+    /* ---- 步骤①三阶段进度条 ---- */
+    QProgressBar {
+        background-color: $off_bg; border: 1px solid $border; border-radius: 6px;
+        text-align: center; color: $text; min-height: 18px;
+    }
+    QProgressBar::chunk { background-color: $accent; border-radius: 5px; }
+
     /* ---- 主按钮：占右栏整宽、16px 粗体、高 ≥40px ---- */
     QPushButton[role="primary"] {
         background-color: $accent; color: #ffffff; border: none; border-radius: 6px;

@@ -22,10 +22,18 @@ html, body {
 }
 
 #viewport {
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  position: relative;
   height: 100%;
+  overflow: hidden;
+}
+
+#scene-host {
+  position: absolute;
+  inset: 0;
+}
+
+#scene-host canvas {
+  display: block;
 }
 
 .card {
@@ -52,4 +60,17 @@ html, body {
 
 #bridge-state.ready {
   color: var(--accent);
+}
+
+#empty-scene {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 2;
+  pointer-events: none;   /* 空态卡不拦截鼠标：旋转/缩放/拖放事件落到画布 */
+}
+
+#empty-scene.hidden {
+  display: none;
 }
