@@ -5,7 +5,7 @@
 
 | 脚本 | 平台 | 产出 | 管什么 |
 |---|---|---|---|
-| `_drive_step3.py` | `QT_QPA_PLATFORM=offscreen` | `step3_drive_log.txt`＋3 张 PNG | 右栏段清单页、桥载荷、插值钳位、布局不越界 |
+| `_drive_step3.py` | `QT_QPA_PLATFORM=offscreen` | `step3_drive_log.txt`＋3 张 PNG | 右栏段清单页、桥载荷、插值钳位、布局不越界、**上屏文案审计** |
 | `_drive_shell_path.py` | **真窗体**（须有显示环境） | `shell_path_log.txt`＋4 张 viewport PNG | 视口折线／箭头／红段／当前段／标记移动／fps 角标／逐位硬核对 |
 | `_spy_playback_clock.py` | 真窗体（上者的挂片） | `playback_clock_log.txt` | 壳侧 16 ms 播放时钟的 tick 节拍 |
 | `_probe.mjs` | 页面内注入 | 由上两者调用 | 读 three 私有场景图＋常驻裸 rAF 心跳（⛔ 非交付件，不放 `view/`） |
@@ -13,10 +13,11 @@
 | `_diag_fps_throttle.py` | **真窗体**（三段对照） | `fps_throttle_diag_log.txt` | fps 节流的排除法诊断：环境本底／页面本底／壳内逐阶段心跳＋单帧回调耗时 |
 
 取证脚本按卡片粒度硬约束重构为 `Rig` 类＋一节一方法（实测：`_drive_shell_path.py` 300 行、最长
-函数 23 行；`_drive_step3.py` 255 行、最长 27 行；`_diag_fps_throttle.py` 222 行、最长 20 行；
+函数 23 行；`_drive_step3.py` 296 行、最长 32 行；`_diag_fps_throttle.py` 222 行、最长 20 行；
 `_pixels.py` 55 行、最长 18 行；`_spy_playback_clock.py` 60 行、最长 13 行；均 ≤300 行／≤50 行）。
-重构前两个 `main()` 分别是 123／157 行，超限；重构后 `step3_drive_log.txt` 与重构前**逐字一致**
-（仅时间戳不同），`shell_path_log.txt` 各节判据亦逐项复现。
+重构前两个 `main()` 分别是 123／157 行，超限；重构当时 `step3_drive_log.txt` 与重构前**逐字一致**
+（仅时间戳不同）——⚠️ 该结论只对「纯重构」那一步成立：其后的**上屏文案整改**（见 K 节）改了三处
+操作员可见字符串，日志里相应几行随之变化，故⛔ 不再宣称与更早的日志逐字一致。
 
 ⚠️ 样件由 `tests/cad_samples.box(600,400,250)` 现场生成、落 tempfile（自造基本体，⛔ 不含甲方
 模型／名称／尺寸）；`view/index.html` **未**注册 path.js（注册行按卡片由指挥方合并时统一加），故
@@ -45,9 +46,9 @@ bridge→loader→pick→path。⛔ 全程未改 index.html、未改 `view/` 下
    rAF 回调套计时壳量得 `n=368｜p50 0.1 ms｜p90 0.5 ms｜max 2.1 ms｜>100 ms 0 个` ⇒
    **单帧渲染成本极低**，节流与几何量／像素量／`view.grab()`／硬件加速均无关，只与宿主帧调度有关。
    ⛔ 不以被节流时的低值冒充「播放流畅」，也⛔ 不拿另一轮的高值冒充本轮实测——本文档所有 fps 均取自
-   重构后脚本的**同一干净轮**（`shell_path_log.txt`：角标 `61／60／58 fps`、心跳 `60`、
-   `isActiveWindow` 全程 True；`playback_clock_log.txt` 为紧随其后的另一干净轮，角标 `60／60／58`、
-   心跳 `58`，两轮的 F 节逐位核对与像素统计完全相同）。被节流轮的读数一律不进本文档数值表。
+   **上屏文案整改后重跑**的同一干净轮（`shell_path_log.txt`：角标 `61／60／58 fps`、心跳 `58`、
+   `isActiveWindow` 全程 True；`playback_clock_log.txt` 为紧随其后的另一干净轮，角标 `62／60／58`、
+   心跳 `58.1`，两轮的 F 节逐位核对与像素统计完全相同）。被节流轮的读数一律不进本文档数值表。
    反例留档（同一脚本、同一组旗标、`isActiveWindow` 全程 True 却被掐）：`播放 2.0s 角标: 画面 4fps`、
    `播放 3.0s 角标: 画面 1fps`、`心跳 fps 0.7`、`末次角标: 画面 1fps`；而**同一轮** F 节仍
    `一致=True ×3`、`标记已移动: True`、段折线颜色切换照常 ⇒ 被掐的只是出帧节奏，几何／位姿／门禁
@@ -90,19 +91,21 @@ bridge→loader→pick→path。⛔ 全程未改 index.html、未改 `view/` 下
 | 再过 0.6 s | `画面 50fps` | 3 |
 | 播完后（看门狗退出 rAF，保留末次实测值） | `画面 58fps` | — |
 
-同轮判别器：`裸 rAF 心跳 fps 60`（与角标同量级 ⇒ 帧调度未被节流）、
+同轮判别器：`裸 rAF 心跳 fps 58`（与角标同量级 ⇒ 帧调度未被节流）、
 `visibilityState／hasFocus ["visible",false]`（hasFocus 恒 false 与帧率无关，干净轮与被节流轮同为
-false，故⛔ 不能拿它当判别器）、末条日志 `[02:49:03] 桥 echo：收到 perf.fps {'fps': 58}`。
+false，故⛔ 不能拿它当判别器）、末条日志 `[03:05:00] 桥 echo：收到 perf.fps {'fps': 58.1}`。
 
-人话日志两句（状态栏只显示最新一条，故取法不同）：`[02:48:56] 开始播放：4 段按段线性插值（不外推、
-不预测下一帧）`＝`play()` 同步写、紧随其后直读；`[02:49:02] 播放结束：共 4 段 · 总长 1.850 m ·
+人话日志两句（状态栏只显示最新一条，故取法不同）：`[03:04:53] 开始播放：共 4 段 · 总长 1.850 m ·
+预估节拍 6.2 s`＝`play()` 同步写、紧随其后直读；`[03:05:00] 播放结束：共 4 段 · 总长 1.850 m ·
 预估节拍 6.2 s`＝用 `wait_log()` 边泵事件边盯到的原句（⛔ 不能盲等再读：它会在半秒后被 `perf.fps`
 桥 echo 顶掉，这是本轮补的取证漏洞——旧脚本 E 节 `pump(6000)` 后读到的恒是 echo）。
+⚠️ 播放起始句原为「4 段按段线性插值（不外推、不预测下一帧）」，因算法术语不该上屏已改成人话汇总
+（K 节登记）；算法表述保留在 `app/pathctl.py` 的分节注释与 `_locate` docstring 里。
 
 壳侧播放时钟（`playback_clock_log.txt`，`_spy_playback_clock.py` 只计数、不改行为）：
-**tick 总数 378｜首末跨度 6.17 s｜间隔中位 16.4 ms｜均值 16.4 ms｜最小 0.7｜最大 72.3｜
-间隔 >200 ms 的次数 0/377** ⇒ 60 Hz 软件时钟没被饿死，发帧连续（前 20 个间隔全在 15.1~16.9 ms）；
-该轮角标 `60／60／58 fps`、心跳 `58`。
+**tick 总数 375｜首末跨度 6.16 s｜间隔中位 16.4 ms｜均值 16.5 ms｜最小 0.6｜最大 99.9｜
+间隔 >200 ms 的次数 0/374** ⇒ 60 Hz 软件时钟没被饿死，发帧连续（前 20 个间隔全在 14.9~16.6 ms）；
+该轮角标 `62／60／58 fps`、心跳 `58.1`。
 
 播放态互锁：`[▶] False｜[⏸] True｜步骤②页可编辑 False`（真窗体那轮）；`[生成路径] False｜段型下拉
 False` 出自离屏那轮 `step3_drive_log.txt`（同一 `set_playing(True)` 路径）。播完 `计时器仍在跑: False`、
@@ -114,7 +117,8 @@ False` 出自离屏那轮 `step3_drive_log.txt`（同一 `set_playing(True)` 路
 
 - 汇总「共 4 段 · 总长 10.025 m · 预估节拍 33.4 s · ⛔ 2 段不可达（已标红，无法进入校核）」
 - 红字行整句原因：`⛔ 第 2 段不可达：X1／X2／X3 合不出 5000 mm：行程合计只到 [0, 3000] mm
-  （各轴行程见 machine.yaml）（另有 1 段同样不可达）——已禁止进入步骤④`
+  （各轴行程以设备参数表为准）（另有 1 段同样不可达）——已禁止进入步骤④`
+  （句尾原为「各轴行程见 machine.yaml」，因配置文件名不该上屏已改，见 K 节）
 - 阻断段号 `[2,3]`；表首列 `['1','⛔ 2','⛔ 3','4']`；单元格 tooltip 存整句
 - 步骤条 `[True,True,True,False,False]`（④⑤锁定）；`[▶播放] 可用: False`
 - 视口侧：`path-seg-2／path-seg-3` 转 deny 红 `0xb3261e`，另两段仍 `0x9fb0bd`；
@@ -124,7 +128,15 @@ False` 出自离屏那轮 `step3_drive_log.txt`（同一 `set_playing(True)` 路
 
 ## D. blending 默认关（完成标准③）＋段型可切
 
-`复选框勾选: False`、`段默认 blending: [False,False,False,False]`。段型下拉 point→contour：
+`复选框勾选: False`、`段默认 blending: [False,False,False,False]`。上屏文案（8 节实测）：复选框标签
+`连续过渡（默认关）`；勾选 → 状态栏 `已开启连续过渡：开启后各段之间不停顿、直接过渡到下一段。机台侧
+接收格式尚未确认，当前只作标记，不改变走位与节拍`（同一串也是该复选框的 tooltip）；取消 →
+`已恢复逐段到达：每段走到位停顿后，再走下一段`；已有路径时勾选 → `结果作废：连续过渡开关已改动
+——须重新生成路径`。⚠️ 三处原文案含英文 `blending` 与内部编号 `电Q-8`，已按 02 §4「全中文」改成人话
+（K 节）；Python 侧 API 名 `Step3Pane.blending()`／`gen_path(..., blending=)`／`Segment.blending`
+**未动**，`tests/test_path.py` 依赖的正是这些名字。
+
+段型下拉 point→contour：
 `切段型后 summary: None`、`path.show {'segments': []}`、日志「结果作废：段型改为「轮廓型
 （作业速度）」——须重新生成路径」；轮廓型段类型 `['LINE']`、速度 `[50.0]`（读自 machine.yaml 的
 work 速度）、汇总节拍由 4.2 s 变 25.0 s（同几何、速度口径不同）。⛔ 电Q-8 回执未到，本期只发
@@ -162,8 +174,8 @@ work 速度）、汇总节拍由 4.2 s 变 25.0 s（同几何、速度口径不�
 | 0.5 | `[600, 200, 0]` | `[600.0, 200.0, 0.0]` | **True** |
 | 1.0 | `[600, 400, 0]` | `[600.0, 400.0, 0.0]` | **True** |
 
-播放中另两次采样亦见标记随帧移动：`[600, 336.68922, 0]`（段2 进行中，该段折线转 accent 蓝
-`0x2f6feb`）→ 0.6 s 后 `[600, 400, 186.60887]`（已进入段3）。`pose.update` 键
+播放中另两次采样亦见标记随帧移动：`[600, 333.83676, 0]`（段2 进行中，该段折线转 accent 蓝
+`0x2f6feb`）→ 0.6 s 后 `[600, 400, 178.55588]`（已进入段3）。`pose.update` 键
 `['poses','seg','ts']`、link `['flange']`、矩阵长度 16、`矩阵全为有限数: True`、
 `段首帧 == 列主序(tool_pose_in_model(joints_start)): True`、列主序平移落在 12/13/14、
 `pose.update 全 ASCII: True`。
@@ -178,8 +190,13 @@ work 速度）、汇总节拍由 4.2 s 变 25.0 s（同几何、速度口径不�
 
 | 面板宽 | pane | table | viewport | 末列右缘 | 水平滚动上限 | 越界 |
 |---|---|---|---|---|---|---|
-| 280（最小宽） | 296 | 240 | 238 | 238 | **0** | False |
+| 280 | **280** | 224 | 222 | 222 | **0** | False |
 | 360（默认） | 360 | 304 | 302 | 302 | **0** | False |
+
+⚠️ 280 那行与 K 节整改前不同（原为 `pane=296／table=240／viewport=238`）：成因是复选框标签由
+「连续过渡（blending，默认关）」缩短为「连续过渡（默认关）」，页内最小宽随之从 296 降到 280 ⇒
+`resize(280)` 不再被最小宽顶回去。这是**文案整改的连带效果、⛔ 不是布局回归**：两行的「水平滚动
+上限 0／越界 False」判据照旧成立，且现在 280 宽是真按 280 排的（比整改前更贴合窄宽要求）。
 
 抓图 `step3_panel_280x640.png`／`step3_panel_360x640.png`／`step3_blocked_360x640.png`
 （offscreen 无 CJK 字体，图里中文为豆腐块——与 T06 同一局限，文字内容以上表打印串为证）。
@@ -232,9 +249,49 @@ SX2=0`，并额外断言 `got["SX2"] == 0.0`（钉住若留 `−1e-16` 一类残
 禁硬编码机台事实、禁复制 tests 的合成绑定、禁数值迭代（按 `SOLVER_FUNCS` 逐函数扫
 `jacobian／newton／ccd／gradient／scipy／numpy／max_iter`，命中即挂）、ik 内部只用行主序。
 
+## K. 上屏文案审计与整改（本轮新增，02 §2 步骤③＋§4）
+
+依据：02 §2 步骤③「禁止上屏：关节角矩阵、插补」、§2 通则「禁止上屏：AP242、B-Rep、wasm、
+tessellation **等一切术语**」、02 §4「单位 mm／s／°…**全中文**」。跑常驻复查 ③／附2 时自查发现
+本单有**五处用户可见**文案带算法术语、英文或内部编号（分布在三个文件），已整改（三件都是 T07 自己的
+交付件，不涉卡片红线②的 T04 四件）：
+
+| 位置 | 整改前（上屏） | 整改后（上屏） |
+|---|---|---|
+| `app/pathctl.py` 播放起始 | `开始播放：4 段按段线性插值（不外推、不预测下一帧）` | `开始播放：共 4 段 · 总长 1.850 m · 预估节拍 6.2 s`（与「播放结束」同口径） |
+| `app/pathctl.py` `_FRAME_NOTE` | `模型框→设备框无配置源（契约 §7.1 待确认）：…` | 上屏改 `_FRAME_TELL`＝`机台坐标系对齐方式尚未配置：本次按「模型与设备同向重合」处理，配置补齐后结果自动跟随`；原技术句**保留**在 `log.warning` |
+| `app/steps/step3_path.py` 复选框 | 标签 `连续过渡（blending，默认关）`、tooltip 含 `电Q-8` | 标签 `连续过渡（默认关）`、tooltip＝`_BLEND_TELL`（人话，无英文无编号）；`电Q-8` 事实移到常量上方注释 |
+| 同上：作废原因串／两句日志 | `连续过渡（blending）开关`、`已恢复逐段到达（blending 关闭）` | `连续过渡开关已改动`、`已恢复逐段到达：每段走到位停顿后，再走下一段` |
+| `core/kinematics/ik.py` 不可达原因 | `…（各轴行程见 machine.yaml）` | `…（各轴行程以设备参数表为准）`（该句经 `Segment.reason` 进红字行与 tooltip） |
+
+⛔ 未动的：Python API 名 `blending`（`Step3Pane.blending()`／`gen_path(..., blending=)`／
+`Segment.blending`）与 `core/path.py`、`view/js/path.js` 里的算法表述（都在注释／docstring／字段名，
+非上屏）。`tests/test_path.py` 只依赖这些**名字**、不断言任何 UI 字符串（已 grep 确认），故改文案后
+`pytest -q` 仍 **202 passed**。
+
+审计手法（`_drive_step3.py` 8 节）：状态栏 `StatusBar.log` 只显示**最新一条**，事后读不到被顶掉的句子
+（`_FRAME_TELL` 就被「路径已生成」顶掉）⇒ 装置里包一层记录器把每句留档；受审集合＝状态栏全部句子
+＋步骤③页可见控件文本（复选框标签／tooltip／提示行／红字行／汇总行／三个按钮／段型下拉）＋段清单
+单元格文本与表头与 tooltip，共 **46 条**。实测：
+
+- `可见文案里的英文字母: ['P', 'X', 'm', 's']` —— `P`＝点位名 `P1→P2`（T06 既定口径的点名）、
+  `X`＝轴号 `X1／X2／X3`（机台轴名，判据本身）、`m`／`s`＝02 §4 明文要求的单位；⛔ 无 `blending`
+  一类英文术语残留。
+- `命中禁用术语: []`（词表＝04 §5.5-③ 的 `B-Rep／AP242／wasm／tessellation／位姿矩阵／插补／关节角`
+  ＋本单加的 `blending／电Q／machine.yaml／插值／外推／预测`）。
+
+⚠️ 未整改、登记请裁决：`core/kinematics/ik.py` 的**构型类**异常消息仍带工程表述（「解析逆解不成立」
+「球腕三角解」「G19」「回代 9 元不符」）。它们只在「移动副排在回转副之后」「≥2 根回转副」这类
+G19 明禁自建的构型下才抛出，现场链（全移动副、末端唯一）走不到 ⇒ 本轮未上屏、未改；若指挥方认为
+core 异常消息一律按上屏文案口径写，请回执后统一改（会牵动 `tests/test_ik.py` 的 `match=` 断言）。
+
 ## 全套回归
 
-- `pytest -q` → **202 passed**（`evidence/T07/pytest_regression_log.txt`）
-- `python tools/lint_no_magic.py` → `[OK] 无轴参数魔法数字；扫描 50 个文件`（path.js 入扫后仍合规）
-- 粒度实测物理行：`app/pathctl.py` 243｜`app/shell.py` 297｜`app/steps/step3_path.py` 238｜
-  `core/path.py` 233｜`view/js/path.js` 247（均 ≤300）
+- `pytest -q` → **202 passed in 32.04s**（`evidence/T07/pytest_regression_log.txt`，文案整改后重跑）
+- `python tools/lint_no_magic.py` → `[OK] 无轴参数魔法数字；扫描 50 个文件` rc=0（path.js 入扫后仍合规）
+- 粒度实测物理行（交付件）：`app/pathctl.py` 246｜`app/shell.py` 297｜`app/steps/step3_path.py` 242｜
+  `core/path.py` 233｜`core/kinematics/ik.py` 300｜`view/js/path.js` 247（均 ≤300；最长函数
+  `ik._solve_positions` 49 行、`step3_path._build` 46 行，均 ≤50）
+- 取证脚本粒度：`_drive_shell_path.py` 300｜`_drive_step3.py` 296｜`_diag_fps_throttle.py` 222｜
+  `_probe.mjs` 81｜`_spy_playback_clock.py` 60｜`_pixels.py` 55
+- 04 §5.5 附4 的粒度命令（`git ls-files … | xargs wc -l | awk '$1>300'`）→ **输出为空**

@@ -6,17 +6,17 @@
 ******        Transfer Mode = 0  I.E.  As Is       ******
 ******        Transferring Shape, ShapeType = 2                      ******
 ** WorkSession : Sending all data
- Step File Name : C:\Users\LIHAOY~1\AppData\Local\Temp\t07_86zachpo\sample_box.step(350 ents)  Write  Done
+ Step File Name : C:\Users\LIHAOY~1\AppData\Local\Temp\t07_w_2nvd3h\sample_box.step(350 ents)  Write  Done
 模型框→设备框无配置源（契约 §7.1 待确认）：本次按同向重合框处理，回执到后只改配置、不改代码
 自造样件: sample_box.step | 尺寸 mm: (600.0, 400.0, 250.0) | 字节: 15455
 启动时窗体成为活动窗口: True
-视口载入后日志: [02:48:48] 桥 echo：收到 pong {'echo': {'seq': 1}}
+视口载入后日志: [03:04:46] 桥 echo：收到 pong {'echo': {'seq': 1}}
 注入 _probe.mjs: _probe.mjs injected
 注入 path.js: path.js injected
 探针就绪: True
 
 === A. 导入自造基本体 ＋ 选定工作模式 ＋ 注 5 个点位 ===
-导入完成: True | [02:48:53] 已导入 sample_box.step，1 个零件，实体模型 ✓
+导入完成: True | [03:04:50] 已导入 sample_box.step，1 个零件，实体模型 ✓
 is_brep: True | 零件数: 1
 点位数: 5
 
@@ -33,7 +33,7 @@ is_brep: True | 零件数: 1
 
 === C. 越界点注入 ⇒ 视口红段＋步骤④⑤锁定（完成标准②）===
 汇总行: 共 4 段 · 总长 10.025 m · 预估节拍 33.4 s · ⛔ 2 段不可达（已标红，无法进入校核）
-红字行: ⛔ 第 2 段不可达：X1／X2／X3 合不出 5000 mm：行程合计只到 [0, 3000] mm（各轴行程见 machine.yaml）（另有 1 段同样不可达）——已禁止进入步骤④
+红字行: ⛔ 第 2 段不可达：X1／X2／X3 合不出 5000 mm：行程合计只到 [0, 3000] mm（各轴行程以设备参数表为准）（另有 1 段同样不可达）——已禁止进入步骤④
 步骤条可用: [True, True, True, False, False] (期望 ④⑤ False)
 [▶播放] 可用: False (期望 False)
     ('path-seg-1', '0x9fb0bd', True)
@@ -46,24 +46,24 @@ is_brep: True | 零件数: 1
 播放前角标: 数据 --Hz · 画面 --fps (期望 --fps：还没转 rAF)
 取样前窗体是否活动窗口（False ⇒ rAF 被节流、本行 fps 读数无效）: True
 播放态：[▶] False [⏸] True | 步骤②页可编辑 False
-播放起始日志（play() 同步写，故此处直读；再晚就被 perf.fps 桥 echo 顶掉）: [02:48:56] 开始播放：4 段按段线性插值（不外推、不预测下一帧）
+播放起始日志（play() 同步写，故此处直读；再晚就被 perf.fps 桥 echo 顶掉）: [03:04:53] 开始播放：共 4 段 · 总长 1.850 m · 预估节拍 6.2 s
   播放 1.0s 角标: 数据 --Hz · 画面 61fps | 窗体活动: True | 当前段: 1
   播放 2.0s 角标: 数据 --Hz · 画面 60fps | 窗体活动: True | 当前段: 1
   播放 3.0s 角标: 数据 --Hz · 画面 58fps | 窗体活动: True | 当前段: 2
-裸 rAF 心跳 fps（探针脚手架，取样窗口外读；判断合成器是否被节流）: 60
+裸 rAF 心跳 fps（探针脚手架，取样窗口外读；判断合成器是否被节流）: 58
 页面 visibilityState／hasFocus（判断 rAF 是否被节流）: ["visible",false]
-播放中 标记世界坐标: [600, 336.68922, 0] | 标记可见: True
+播放中 标记世界坐标: [600, 333.83676, 0] | 标记可见: True
 播放中 段折线颜色: [('path-seg-1', '0x9fb0bd', True), ('path-seg-2', '0x2f6feb', True), ('path-seg-3', '0x9fb0bd', True), ('path-seg-4', '0x9fb0bd', True)]
-再过 0.6s 标记世界坐标: [600, 400, 186.60887] | 当前段: 3
+再过 0.6s 标记世界坐标: [600, 400, 178.55588] | 当前段: 3
 标记已移动: True
 再过 0.6s 角标: 数据 --Hz · 画面 50fps
 截图: D:\ZCode项目\多功能机械臂软件-wt\t07\evidence\T07\viewport_playing_late.png
 
 === E. 播完自动停钟（退回按需渲染）===
-播完日志（边泵边盯到的原句）: [02:49:02] 播放结束：共 4 段 · 总长 1.850 m · 预估节拍 6.2 s
+播完日志（边泵边盯到的原句）: [03:05:00] 播放结束：共 4 段 · 总长 1.850 m · 预估节拍 6.2 s
 计时器仍在跑: False (期望 False)
 末次角标: 数据 --Hz · 画面 58fps
-末条日志: [02:49:03] 桥 echo：收到 perf.fps {'fps': 58}
+末条日志: [03:05:00] 桥 echo：收到 perf.fps {'fps': 58.1}
 步骤②页恢复可编辑: True
 
 === F. 硬核对：视口标记世界坐标 == core 位姿的平移分量（表格与视口一致）===

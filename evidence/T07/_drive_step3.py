@@ -28,6 +28,10 @@ OUT = os.path.dirname(os.path.abspath(__file__))
 FIVE = ((0.0, 0.0, 0.0), (300.0, 0.0, 0.0), (300.0, 400.0, 0.0),
         (300.0, 400.0, 250.0), (600.0, 400.0, 250.0))
 BROKEN = (5000.0, 0.0, 0.0)          # 越界注入（占位行程合计只到 3000 mm）
+# 8 节文案审计的禁用词：04 §5.5-③ 的复查词 ＋ 02 §4「全中文」不容的内部编号／英文术语
+# ＋ W-5.7 的算法表述（这些只能待在注释、日志与汇报里，⛔ 不上屏）。
+BANNED = ("B-Rep", "AP242", "wasm", "tessellation", "位姿矩阵", "插补", "关节角",
+          "blending", "电Q", "machine.yaml", "插值", "外推", "预测")
 
 
 class StubBridge(QObject):
@@ -74,6 +78,10 @@ class Rig:
         self.ctl = PathController(self.panel, self.bridge, self.stepbar, self.statusbar)
         self.panel.step2.set_mode("多功能臂A")
         self.ctl.changed.connect(self.refresh)
+        # 状态栏只显示最新一条（后一句顶掉前一句）⇒ 装记录器把说过的每句留档，供 8 节文案审计。
+        self.said = []
+        tell = self.statusbar.log
+        self.statusbar.log = lambda msg: (self.said.append(msg), tell(msg))[1]
 
     def refresh(self):
         """复刻 shell._refresh_unlock：②③已解锁（本脚本视作已选模式＋已导实体），④⑤另需路径 ok。"""
@@ -243,11 +251,44 @@ class Rig:
             pix.save(path)
             print(f"    grabbed {pix.width()}x{pix.height()} -> {path}")
 
+    def s8_screen_text(self):
+        """8 节：上屏文案审计（02 §2 步骤③ 禁术语上屏、§4 全中文）——⛔ 只读控件文本。"""
+        print("\n=== 8. 上屏文案审计：状态栏每句＋控件可见文本＋单元格提示 ===")
+        self.panel.step3._blend.setChecked(True)      # 勾／取消各一次，把两句人话逼出来
+        self.panel.step3._blend.setChecked(False)
+        feed_points(self.panel, [FIVE[0], BROKEN, FIVE[2]])
+        self.ctl.generate()                           # 造一条不可达段，让红字行与 tooltip 就位
+        for line in self.said:
+            print("  状态栏:", line)
+        step3 = self.panel.step3
+        texts = [step3._blend.text(), step3._blend.toolTip(), step3._hint.text(),
+                 step3._block_line.text(), step3._summary_line.text(), step3._btn.text(),
+                 step3._play.text(), step3._pause.text(), step3._kind.currentText()]
+        texts += [step3._table.item(r, c).toolTip()
+                  for r in range(step3._table.rowCount())
+                  for c in range(step3._table.columnCount())
+                  if step3._table.item(r, c).toolTip()]
+        texts += [step3._table.item(r, c).text()
+                  for r in range(step3._table.rowCount())
+                  for c in range(step3._table.columnCount())]
+        texts += [step3._table.horizontalHeaderItem(c).text()
+                  for c in range(step3._table.columnCount())]
+        texts += list(self.said)
+        print("  复选框标签:", step3._blend.text())
+        print("  复选框提示:", step3._blend.toolTip())
+        print("  红字行:", step3._block_line.text())
+        print("  受审文案条数:", len(texts))
+        print("  可见文案里的英文字母:",
+              sorted({ch for text in texts for ch in text if ch.isascii() and ch.isalpha()}))
+        print("  命中禁用术语:",
+              sorted({w for w in BANNED for text in texts if w.lower() in text.lower()}),
+              "(期望 [])")
+
 
 def main():
     rig = Rig()
     for section in (rig.s0_point_shortage, rig.s1_generate, rig.s2_blending, rig.s3_blocked,
-                    rig.s4_locate, rig.s5_lerp, rig.s6_fps, rig.s7_layout):
+                    rig.s4_locate, rig.s5_lerp, rig.s6_fps, rig.s7_layout, rig.s8_screen_text):
         section()
 
 
