@@ -21,6 +21,10 @@ REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 
 AXIS_TYPES = ("prismatic", "revolute")
 AXIS_ROLES = ("trajectory", "setup")
+# 连杆的运动方向取值（设备坐标系右手系，S-1 契约第 7 章）：移动副＝平移轴、回转副＝转轴。
+# 与 core.kinematics.transform.AXES_XYZ 同值但**各自定义**：依赖方向是 kinematics→config
+# （fk 要读 MachineConfig），config 反向导入即成环。G18（04 §7.2）扩 links.axis／links.motion。
+MOTIONS = ("x", "y", "z")
 COUPLING_TYPES = ("sync", "ratio")
 PACK_PROFILES = ("v1_2_8axis", "v1_3_24axis")
 # pack_profile → 回读 axis_pos／axis_vel 节点数（契约 §6.1 的 `Pos`／`Vel` 同为 ARRAY[0..7]），
@@ -44,7 +48,10 @@ WRITE_NODE_SPEC = (("cmd", False), ("seq_id", False), ("seg_count", False),
                    ("speed_override", False), ("seg_array", False))
 AXIS_KEYS = ("id", "type", "role", "travel", "direction", "scale", "coupling")
 MODE_KEYS = ("id", "name", "axes")
-LINK_KEYS = ("id", "length_mm", "parent")
+# axis／motion 系 G18（04 §7.2，@user 2026-09-16 22:10 授权 T07 代 T03）扩入：键**必填**、
+# 值可显式写 null（无驱动轴的连杆，如 base／flange）。列入本表即被 tests/test_config.py 的
+# 「样例必须把必填键逐个显式写出」用例锁住，防后续会话把 `axis: null` 一类占位删掉而静默改语义。
+LINK_KEYS = ("id", "length_mm", "parent", "axis", "motion")
 MACHINE_KEYS = ("name", "schema_ver")
 OPCUA_KEYS = ("endpoint_url", "security_policy", "ns_index", "pack_profile",
               "read_nodes", "write_nodes", "publish_interval_ms")
@@ -97,11 +104,21 @@ class Mode:
 
 @dataclass(frozen=True)
 class Link:
-    """连杆几何（T04 的 fk 链式变换用）；length_mm 单位 mm，parent 为 links 表内 id。"""
+    """连杆几何＋驱动绑定（T04 的 fk 链式变换、T07 的 ik 拓扑都从此读，禁在代码里写死）。
+
+    length_mm 单位 mm、parent 为 links 表内 id；axis 为 axes 表内 id（None＝该连杆无驱动轴，
+    如 base／flange），motion 取 MOTIONS 之一、为 axis 的运动方向（设备坐标系右手系），
+    **与 axis 同生同灭**（G18）。axis／motion 带 None 默认值只为不破 T04 已验收测试里
+    ``Link(id, length_mm, parent)`` 的位置构造——yaml 侧两键仍**必填**（见 LINK_KEYS）。
+    ⚠️ 当前全部取值是**占位**（踏勘第 7 项回执未到，同 length_mm 现值 0.0），不得据此承诺可达性；
+    回执到后只改 machine.yaml，不改 fk／ik。
+    """
 
     id: str
     length_mm: float
     parent: str | None
+    axis: str | None = None
+    motion: str | None = None
 
 
 @dataclass(frozen=True)

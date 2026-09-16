@@ -13,9 +13,11 @@ axes:
 modes:
   - {id: grind, name: 打磨, axes: [X1, RA]}
 
+# G18 两键：base 无驱动轴（axis／motion 双 null）；gantry 由 X1 驱动、沿 x。
+# 绑到 X1 是因为它在 8 个样例里都**无注入缺陷**，故各 bad_* 的「共 N 项问题」计数不变。
 links:
-  - {id: base, length_mm: 0.0, parent: null}
-  - {id: gantry, length_mm: 100.0, parent: base}
+  - {id: base, length_mm: 0.0, parent: null, axis: null, motion: null}
+  - {id: gantry, length_mm: 100.0, parent: base, axis: X1, motion: x}
 
 limits: {speed_max_mm_s: 100.0, speed_rapid_mm_s: 80.0, speed_work_mm_s: 10.0,
          accel_max_mm_s2: 500.0, clearance_warn_mm: 20.0, collision_envelope_mm: 3.0,
