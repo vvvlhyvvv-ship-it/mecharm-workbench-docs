@@ -8,7 +8,15 @@
 | `_drive_step3.py` | `QT_QPA_PLATFORM=offscreen` | `step3_drive_log.txt`＋3 张 PNG | 右栏段清单页、桥载荷、插值钳位、布局不越界 |
 | `_drive_shell_path.py` | **真窗体**（须有显示环境） | `shell_path_log.txt`＋4 张 viewport PNG | 视口折线／箭头／红段／当前段／标记移动／fps 角标／逐位硬核对 |
 | `_spy_playback_clock.py` | 真窗体（上者的挂片） | `playback_clock_log.txt` | 壳侧 16 ms 播放时钟的 tick 节拍 |
-| `_probe.mjs` | 页面内注入 | 由上两者调用 | 读 three 私有场景图（⛔ 非交付件，不放 `view/`） |
+| `_probe.mjs` | 页面内注入 | 由上两者调用 | 读 three 私有场景图＋常驻裸 rAF 心跳（⛔ 非交付件，不放 `view/`） |
+| `_pixels.py` | 被 `_drive_shell_path.py` import | 无独立产出 | 视口截图的像素统计口径（色表／容差／`green_dominant` 判据／存图） |
+| `_diag_fps_throttle.py` | **真窗体**（三段对照） | `fps_throttle_diag_log.txt` | fps 节流的排除法诊断：环境本底／页面本底／壳内逐阶段心跳＋单帧回调耗时 |
+
+取证脚本按卡片粒度硬约束重构为 `Rig` 类＋一节一方法（实测：`_drive_shell_path.py` 300 行、最长
+函数 23 行；`_drive_step3.py` 255 行、最长 27 行；`_diag_fps_throttle.py` 222 行、最长 20 行；
+`_pixels.py` 55 行、最长 18 行；`_spy_playback_clock.py` 60 行、最长 13 行；均 ≤300 行／≤50 行）。
+重构前两个 `main()` 分别是 123／157 行，超限；重构后 `step3_drive_log.txt` 与重构前**逐字一致**
+（仅时间戳不同），`shell_path_log.txt` 各节判据亦逐项复现。
 
 ⚠️ 样件由 `tests/cad_samples.box(600,400,250)` 现场生成、落 tempfile（自造基本体，⛔ 不含甲方
 模型／名称／尺寸）；`view/index.html` **未**注册 path.js（注册行按卡片由指挥方合并时统一加），故
@@ -20,13 +28,30 @@ bridge→loader→pick→path。⛔ 全程未改 index.html、未改 `view/` 下
 1. **in-app 浏览器测不了动画**：`document.hidden=true`、`visibilityState=hidden`、
    `innerWidth/Height=0`，rAF 根本不转，`take_screenshot` 报 `NATIVE_BROWSER_VIEWPORT_UNAVAILABLE`
    （与 T06 记录的同一局限）⇒ 视口侧一律改用**真 Qt 窗体**取证；offscreen 只用于右栏面板。
-2. **fps 读数受 Chromium 前后台节流影响，必须带定性条件读**：同一脚本三轮实测——窗体真活动时
-   角标 `64／60／58 fps`（末次 `perf.fps {'fps': 56.1}`）；窗体非活动时只剩 `1~3 fps`
-   （末次 `{'fps': 0.7}`）。故 D 节逐秒并列打印 `isActiveWindow`，该值为 False 的行读数作废；
-   脚本自身在 `QApplication` 之前设 `QTWEBENGINE_CHROMIUM_FLAGS`（含
-   `--disable-features=CalculateNativeWinOcclusion`）关掉后台节流。⛔ 不以被节流时的低值冒充
-   「播放流畅」，也⛔ 不拿另一轮的高值冒充本轮实测——本文档所有 fps 均取自
-   `shell_path_log.txt`／`playback_clock_log.txt` 同一轮（该轮 `isActiveWindow` 全程 True）。
+2. **fps 读数受 Chromium 帧调度节流影响，必须带判别器读**：脚本自身在 `QApplication` 之前设
+   `QTWEBENGINE_CHROMIUM_FLAGS`（三件套 ＋ `--disable-features=CalculateNativeWinOcclusion`——
+   Windows 上真正判遮挡的是它，只关三件套时 `visibilityState` 已回 `visible` 而帧率照旧被掐），
+   并把窗体设为 `WindowStaysOnTopHint`＋`foremost()` 重试 `raise_/activateWindow` 且**回读**
+   `isActiveWindow()`（⛔ 不拿调用本身当成功）。即便如此，节流仍**间歇**发生：`isActiveWindow`
+   为 True、四旗标全开时，角标也可能只剩 `1~7 fps`。故 `_probe.mjs` 另挂一条**常驻裸 rAF 心跳**
+   （只计数、不渲染）作判别器——心跳与角标同时掉到 `0.7 fps` ⇒ 是整页帧调度被掐，⛔ 不是
+   path.js 循环停转或壳侧时钟饿死（tick 探针**各轮**均为中位 16.4~16.5 ms、`>200 ms` 0 次，
+   含被节流那轮——壳侧 60 Hz 时钟照走，只是视口出不了帧）。
+   排除法已固化为入库脚本 `_diag_fps_throttle.py`（产出 `fps_throttle_diag_log.txt`），三段对照实测：
+   ①裸 `QWebEngineView`＋空页 rAF `60／60／60 fps`（环境本底）；②载入真 `index.html`
+   （three.js＋WebGL）心跳 `60／60／60 fps`、渲染器 `ANGLE (AMD Radeon … Direct3D11)`＝硬件渲染
+   ⛔ 未掉 SwiftShader（页面本底）；③真壳逐阶段心跳（未导入／已导入／已生成／越界生成＋做过两次
+   `view.grab()`／恢复可达／播放中／已暂停）**全 60 fps**，同轮角标 `62／60／58 fps`，播放中给
+   rAF 回调套计时壳量得 `n=368｜p50 0.1 ms｜p90 0.5 ms｜max 2.1 ms｜>100 ms 0 个` ⇒
+   **单帧渲染成本极低**，节流与几何量／像素量／`view.grab()`／硬件加速均无关，只与宿主帧调度有关。
+   ⛔ 不以被节流时的低值冒充「播放流畅」，也⛔ 不拿另一轮的高值冒充本轮实测——本文档所有 fps 均取自
+   重构后脚本的**同一干净轮**（`shell_path_log.txt`：角标 `61／60／58 fps`、心跳 `60`、
+   `isActiveWindow` 全程 True；`playback_clock_log.txt` 为紧随其后的另一干净轮，角标 `60／60／58`、
+   心跳 `58`，两轮的 F 节逐位核对与像素统计完全相同）。被节流轮的读数一律不进本文档数值表。
+   反例留档（同一脚本、同一组旗标、`isActiveWindow` 全程 True 却被掐）：`播放 2.0s 角标: 画面 4fps`、
+   `播放 3.0s 角标: 画面 1fps`、`心跳 fps 0.7`、`末次角标: 画面 1fps`；而**同一轮** F 节仍
+   `一致=True ×3`、`标记已移动: True`、段折线颜色切换照常 ⇒ 被掐的只是出帧节奏，几何／位姿／门禁
+   链路不受影响，故本单其余判据不以「窗体真活动」为前提，只有 fps 一项需要。
 3. **像素判据含干扰，硬结论一律以场景图数值为准**：工件本体色 `0x8a97a3` 与 `text_dim 0x9fb0bd`
    落在 ±26 容差内互相污染；pick.js 标号牌边框就是 accent 蓝；工具标记按 token 色匹配对光照着色
    无效（`tool_marker 0`），故另立 `green_dominant`（g>r+30 且 g>b+30）判据，实测 1087 像素。
@@ -59,18 +84,29 @@ bridge→loader→pick→path。⛔ 全程未改 index.html、未改 `view/` 下
 | 时刻 | 底部角标 | 当前段 |
 |---|---|---|
 | 播放前 | `数据 --Hz · 画面 --fps` | — |
-| 播放 1.0 s | `画面 64fps` | 1 |
-| 播放 2.0 s | `画面 60fps` | 2 |
+| 播放 1.0 s | `画面 61fps` | 1 |
+| 播放 2.0 s | `画面 60fps` | 1 |
 | 播放 3.0 s | `画面 58fps` | 2 |
-| 播完后（看门狗退出 rAF，保留末次实测值） | `画面 56fps` | — |
+| 再过 0.6 s | `画面 50fps` | 3 |
+| 播完后（看门狗退出 rAF，保留末次实测值） | `画面 58fps` | — |
+
+同轮判别器：`裸 rAF 心跳 fps 60`（与角标同量级 ⇒ 帧调度未被节流）、
+`visibilityState／hasFocus ["visible",false]`（hasFocus 恒 false 与帧率无关，干净轮与被节流轮同为
+false，故⛔ 不能拿它当判别器）、末条日志 `[02:49:03] 桥 echo：收到 perf.fps {'fps': 58}`。
+
+人话日志两句（状态栏只显示最新一条，故取法不同）：`[02:48:56] 开始播放：4 段按段线性插值（不外推、
+不预测下一帧）`＝`play()` 同步写、紧随其后直读；`[02:49:02] 播放结束：共 4 段 · 总长 1.850 m ·
+预估节拍 6.2 s`＝用 `wait_log()` 边泵事件边盯到的原句（⛔ 不能盲等再读：它会在半秒后被 `perf.fps`
+桥 echo 顶掉，这是本轮补的取证漏洞——旧脚本 E 节 `pump(6000)` 后读到的恒是 echo）。
 
 壳侧播放时钟（`playback_clock_log.txt`，`_spy_playback_clock.py` 只计数、不改行为）：
-**tick 总数 376｜首末跨度 6.17 s｜间隔中位 16.4 ms｜均值 16.4 ms｜最小 1.7｜最大 92.9｜
-间隔 >200 ms 的次数 0/375** ⇒ 60 Hz 软件时钟没被饿死，发帧连续。
+**tick 总数 378｜首末跨度 6.17 s｜间隔中位 16.4 ms｜均值 16.4 ms｜最小 0.7｜最大 72.3｜
+间隔 >200 ms 的次数 0/377** ⇒ 60 Hz 软件时钟没被饿死，发帧连续（前 20 个间隔全在 15.1~16.9 ms）；
+该轮角标 `60／60／58 fps`、心跳 `58`。
 
-播放态互锁：`[▶] False｜[⏸] True｜[生成路径] False｜段型下拉 False｜步骤②页可编辑 False`；
-播完 `计时器仍在跑: False`、`步骤②页恢复可编辑: True`、日志「播放结束：共 4 段 · 总长 1.850 m ·
-预估节拍 6.2 s」。点步骤条②（离开本页）→ `播放是否已暂停: True｜步骤②页恢复可编辑: True`。
+播放态互锁：`[▶] False｜[⏸] True｜步骤②页可编辑 False`（真窗体那轮）；`[生成路径] False｜段型下拉
+False` 出自离屏那轮 `step3_drive_log.txt`（同一 `set_playing(True)` 路径）。播完 `计时器仍在跑: False`、
+`步骤②页恢复可编辑: True`。点步骤条②（离开本页）→ `播放是否已暂停: True｜步骤②页恢复可编辑: True`。
 
 ## C. 越界用例：红段＋无法进入④（完成标准②）
 
@@ -126,8 +162,8 @@ work 速度）、汇总节拍由 4.2 s 变 25.0 s（同几何、速度口径不�
 | 0.5 | `[600, 200, 0]` | `[600.0, 200.0, 0.0]` | **True** |
 | 1.0 | `[600, 400, 0]` | `[600.0, 400.0, 0.0]` | **True** |
 
-播放中另两次采样亦见标记随帧移动：`[600, 316.75467, 0]`（段2 进行中，该段折线转 accent 蓝
-`0x2f6feb`）→ 0.6 s 后 `[600, 400, 141.21773]`（已进入段3）。`pose.update` 键
+播放中另两次采样亦见标记随帧移动：`[600, 336.68922, 0]`（段2 进行中，该段折线转 accent 蓝
+`0x2f6feb`）→ 0.6 s 后 `[600, 400, 186.60887]`（已进入段3）。`pose.update` 键
 `['poses','seg','ts']`、link `['flange']`、矩阵长度 16、`矩阵全为有限数: True`、
 `段首帧 == 列主序(tool_pose_in_model(joints_start)): True`、列主序平移落在 12/13/14、
 `pose.update 全 ASCII: True`。
@@ -164,6 +200,11 @@ three r160 下页面拿不到 loader 的私有 scene/camera：`new THREE.WebGLRe
 renderer/camera；链式包裹 `Object3D.prototype.add` 捕获 scene；两者都只观察、原方法照旧 `apply`。
 `_probe.mjs` 报对象前先过 `o.parent`，否则会把已 `dispose` 的旧段一起报（实测折线数 4→8→12 的假象）。
 无 renderer 句柄需重绘时派发 `resize`，借 loader 自身 `resize()→render()` 出一帧。
+
+探针另挂一条**常驻裸 rAF 心跳**（`heartbeat()`：只 `beats += 1`、每 500 ms 折算一次 fps，⛔ 不渲染、
+不碰场景图），独立于 path.js 的播放循环 ⇒ 可把「宿主把整页帧调度掐了」与「path.js 循环停转」分开：
+被节流那轮心跳与角标同为 `0.7 fps`，干净轮同为 `58~60`。⚠️ 心跳自己也在 rAF 上，故它**只能作判别器**、
+⛔ 不能用来解除节流（曾指望多一条 rAF 能把合成器唤醒，实测无效）。
 
 ## J. ik 已知位姿手算复核（`tests/test_ik.py`，25 例；纸面算式逐条对到断言值）
 

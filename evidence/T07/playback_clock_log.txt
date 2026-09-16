@@ -6,17 +6,17 @@
 ******        Transfer Mode = 0  I.E.  As Is       ******
 ******        Transferring Shape, ShapeType = 2                      ******
 ** WorkSession : Sending all data
- Step File Name : C:\Users\LIHAOY~1\AppData\Local\Temp\t07_oili_db2\sample_box.step(350 ents)  Write  Done
+ Step File Name : C:\Users\LIHAOY~1\AppData\Local\Temp\t07_r16wavhf\sample_box.step(350 ents)  Write  Done
 模型框→设备框无配置源（契约 §7.1 待确认）：本次按同向重合框处理，回执到后只改配置、不改代码
 自造样件: sample_box.step | 尺寸 mm: (600.0, 400.0, 250.0) | 字节: 15455
 启动时窗体成为活动窗口: True
-视口载入后日志: [02:07:00] 桥 echo：收到 pong {'echo': {'seq': 1}}
+视口载入后日志: [02:49:17] 桥 echo：收到 pong {'echo': {'seq': 1}}
 注入 _probe.mjs: _probe.mjs injected
 注入 path.js: path.js injected
 探针就绪: True
 
 === A. 导入自造基本体 ＋ 选定工作模式 ＋ 注 5 个点位 ===
-导入完成: True | [02:07:05] 已导入 sample_box.step，1 个零件，实体模型 ✓
+导入完成: True | [02:49:21] 已导入 sample_box.step，1 个零件，实体模型 ✓
 is_brep: True | 零件数: 1
 点位数: 5
 
@@ -46,21 +46,24 @@ is_brep: True | 零件数: 1
 播放前角标: 数据 --Hz · 画面 --fps (期望 --fps：还没转 rAF)
 取样前窗体是否活动窗口（False ⇒ rAF 被节流、本行 fps 读数无效）: True
 播放态：[▶] False [⏸] True | 步骤②页可编辑 False
-  播放 1.0s 角标: 数据 --Hz · 画面 64fps | 窗体活动: True | 当前段: 1
-  播放 2.0s 角标: 数据 --Hz · 画面 58fps | 窗体活动: True | 当前段: 1
+播放起始日志（play() 同步写，故此处直读；再晚就被 perf.fps 桥 echo 顶掉）: [02:49:24] 开始播放：4 段按段线性插值（不外推、不预测下一帧）
+  播放 1.0s 角标: 数据 --Hz · 画面 60fps | 窗体活动: True | 当前段: 1
+  播放 2.0s 角标: 数据 --Hz · 画面 60fps | 窗体活动: True | 当前段: 1
   播放 3.0s 角标: 数据 --Hz · 画面 58fps | 窗体活动: True | 当前段: 2
+裸 rAF 心跳 fps（探针脚手架，取样窗口外读；判断合成器是否被节流）: 58
 页面 visibilityState／hasFocus（判断 rAF 是否被节流）: ["visible",false]
-播放中 标记世界坐标: [600, 317.89134, 0] | 标记可见: True
+播放中 标记世界坐标: [600, 334.43607, 0] | 标记可见: True
 播放中 段折线颜色: [('path-seg-1', '0x9fb0bd', True), ('path-seg-2', '0x2f6feb', True), ('path-seg-3', '0x9fb0bd', True), ('path-seg-4', '0x9fb0bd', True)]
-再过 0.6s 标记世界坐标: [600, 400, 133.00544] | 当前段: 3
+再过 0.6s 标记世界坐标: [600, 400, 171.22493] | 当前段: 3
 标记已移动: True
-再过 0.6s 角标: 数据 --Hz · 画面 50fps
+再过 0.6s 角标: 数据 --Hz · 画面 52fps
 截图: D:\ZCode项目\多功能机械臂软件-wt\t07\evidence\T07\viewport_playing_late.png
 
 === E. 播完自动停钟（退回按需渲染）===
+播完日志（边泵边盯到的原句）: [02:49:31] 播放结束：共 4 段 · 总长 1.850 m · 预估节拍 6.2 s
 计时器仍在跑: False (期望 False)
 末次角标: 数据 --Hz · 画面 56fps
-末条日志: [02:07:15] 桥 echo：收到 perf.fps {'fps': 56.1}
+末条日志: [02:49:31] 桥 echo：收到 perf.fps {'fps': 56}
 步骤②页恢复可编辑: True
 
 === F. 硬核对：视口标记世界坐标 == core 位姿的平移分量（表格与视口一致）===
@@ -68,11 +71,11 @@ is_brep: True | 零件数: 1
   段2 ratio=0.5: 视口=[600, 200, 0] core=[600.0, 200.0, 0.0] 一致=True
   段2 ratio=1.0: 视口=[600, 400, 0] core=[600.0, 400.0, 0.0] 一致=True
 
-=== G. 视口像素统计（辅证，干扰源见 docstring）===
+=== G. 视口像素统计（辅证，干扰源见 _pixels.py）===
   1038x1246: {'idle_seg': 1308, 'current_seg': 621, 'blocked_seg': 0, 'tool_marker': 0, 'model_body': 2480, 'green_dominant': 1087}
 
 === tick 探针（壳侧播放时钟）===
-tick 总数: 376 | 首末跨度 s: 6.17
-间隔 ms  中位: 16.4 | 均值: 16.4 | 最小: 1.7 | 最大: 92.9
-间隔 >200 ms 的次数: 0 / 375 （0 ⇒ 时钟没被饿死，发帧连续）
-前 20 个间隔: [15.8, 16.5, 15.2, 16.2, 16.5, 15.9, 15.4, 16.7, 17.2, 16.8, 16.1, 17.4, 15.9, 16.2, 18.3, 15.2, 16.8, 16.6, 17.8, 15.7]
+tick 总数: 378 | 首末跨度 s: 6.17
+间隔 ms  中位: 16.4 | 均值: 16.4 | 最小: 0.7 | 最大: 72.3
+间隔 >200 ms 的次数: 0 / 377 （0 ⇒ 时钟没被饿死，发帧连续）
+前 20 个间隔: [16.5, 15.3, 16.5, 15.5, 16.4, 15.9, 16.7, 15.3, 15.7, 15.9, 16.6, 16.7, 15.3, 16.2, 15.9, 16.1, 15.1, 16.9, 15.6, 15.7]
