@@ -10,9 +10,13 @@ from __future__ import annotations
 import core.geometry as geo
 
 # 03 §3 公开符号清单（与包 __init__.__all__ 对应）。
+# ⚠️ face_point_from_tri／face_center／FacePoint／Waypoint 四符号＝指挥方在 T06 合并时统一加的
+#    包根 re-export（T06 派单卡「开工前置与口径」②：实现会话禁改 __init__.py 与本断言，由指挥方处置）。
 PUBLIC = [
     "import_model", "tessellate", "encode_mesh_parts",
+    "face_point_from_tri", "face_center",
     "Assembly", "AssemblyNode", "MeshPart", "GeometryError", "SUPPORTED_EXT",
+    "FacePoint", "Waypoint",
 ]
 
 

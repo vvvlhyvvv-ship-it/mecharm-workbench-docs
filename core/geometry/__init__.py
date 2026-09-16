@@ -4,6 +4,8 @@
   ``import_model(path) -> Assembly``                 STEP/IGES/STL 导入，还原装配树，判 is_brep
   ``tessellate(assembly, deflection) -> [MeshPart]``  按部件三角化，附 ``face_map``
   ``encode_mesh_parts(parts) -> [dict]``             序列化为桥 ``mesh.load`` 载荷（base64）
+  ``face_point_from_tri(parts, mesh_id, face_id, u, v) -> FacePoint``  重心坐标→B-Rep 面真实点（T06）
+  ``face_center(parts, mesh_id, face_id) -> FacePoint``               B-Rep 面心真实点（T06）
 
 单位与坐标系（与 config.schema 一致）：长度 mm，右手系、Z 竖直向上；顶点为模型自身坐标系下的
 mm 值；三角化弦高容差 ``deflection`` 单位 mm（来自 machine.yaml ``limits.tessellate_deflection_mm``，
@@ -32,8 +34,12 @@ mm 值；三角化弦高容差 ``deflection`` 单位 mm（来自 machine.yaml ``
 from core.geometry.import_model import (SUPPORTED_EXT, Assembly, AssemblyNode, GeometryError,
                                         import_model)
 from core.geometry.tessellate import MeshPart, encode_mesh_parts, tessellate
+from core.geometry.face_point import (FacePoint, Waypoint, face_center,
+                                       face_point_from_tri)
 
 __all__ = [
     "import_model", "tessellate", "encode_mesh_parts",
+    "face_point_from_tri", "face_center",
     "Assembly", "AssemblyNode", "MeshPart", "GeometryError", "SUPPORTED_EXT",
+    "FacePoint", "Waypoint",
 ]
