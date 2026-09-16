@@ -23,18 +23,25 @@ AXIS_TYPES = ("prismatic", "revolute")
 AXIS_ROLES = ("trajectory", "setup")
 COUPLING_TYPES = ("sync", "ratio")
 PACK_PROFILES = ("v1_2_8axis", "v1_3_24axis")
-# pack_profile → 回读 axis_pos 节点数（＝契约 §5.2 的 Pos[] 长度），用于「节点表与 pack_profile
-# 禁只改一边」的一致性校验。V1.3 尚未冻结（CR-2026-03 §三-5：EnableMask 加宽能否吞并 Reserved2
-# 仍悬置，且 22 轴是否占满 24 槽位未定），故记 None：加载器对 None 跳过校验，冻结后回填数字即生效。
+# pack_profile → 回读 axis_pos／axis_vel 节点数（契约 §6.1 的 `Pos`／`Vel` 同为 ARRAY[0..7]），
+# 用于「节点表与 pack_profile 禁只改一边」的一致性校验。V1.3 尚未冻结（CR-2026-03 §三-5：
+# EnableMask 加宽能否吞并 Reserved2 仍悬置，且 22 轴是否占满 24 槽位未定），故记 None：
+# 加载器对 None 跳过校验，冻结后回填数字即生效。
 PACK_PROFILE_AXIS_COUNT: dict[str, int | None] = {"v1_2_8axis": 8, "v1_3_24axis": None}
 TRAJECTORY_AXES_MAX = 9  # 03 §4「实机轴系口径」：每工作模式的轨迹级轴上限
 SECTIONS = ("machine", "axes", "modes", "links", "limits", "opcua", "paths")
 LIMIT_KEYS = ("speed_max_mm_s", "speed_rapid_mm_s", "speed_work_mm_s", "accel_max_mm_s2",
               "clearance_warn_mm", "collision_envelope_mm", "tessellate_deflection_mm",
               "path_sample_step_mm")
-# 节点子表规格：(键名, 是否为 NodeId 数组)。axis_pos 的**个数**由 PACK_PROFILE_AXIS_COUNT 约束
-READ_NODE_SPEC = (("axis_pos", True), ("status", False), ("heartbeat", False))
-WRITE_NODE_SPEC = (("cmd", False), ("seg_count", False), ("seg_array", False))
+# 节点子表规格：(键名, 是否为 NodeId 数组)。axis_pos／axis_vel 的**个数**由 PACK_PROFILE_AXIS_COUNT 约束。
+# 键序照 03 §4 的字段结构。ack／alarm_word／seq_id／cur_seg（读）与 seq_id／speed_override（写）
+# 系 2026-09-16 G17 裁决补入：契约 §9.1 步骤 1/2/4/6/7 的握手要按符号名读写 `Ack`／`AlarmWord`／
+# `SeqID`（下发与回显）／`CurSeg`／`SpeedOverride`，原三键表覆盖不到，而 _nodes() 只按本 SPEC 遍历
+# ——yaml 里自行加键会被静默丢弃，故必须在此扩表（04 §7.2-G17）。
+READ_NODE_SPEC = (("axis_pos", True), ("axis_vel", True), ("status", False), ("heartbeat", False),
+                  ("ack", False), ("alarm_word", False), ("seq_id", False), ("cur_seg", False))
+WRITE_NODE_SPEC = (("cmd", False), ("seq_id", False), ("seg_count", False),
+                   ("speed_override", False), ("seg_array", False))
 AXIS_KEYS = ("id", "type", "role", "travel", "direction", "scale", "coupling")
 MODE_KEYS = ("id", "name", "axes")
 LINK_KEYS = ("id", "length_mm", "parent")
@@ -114,8 +121,10 @@ class Limits:
 @dataclass(frozen=True)
 class OpcUa:
     """OPC UA 接入参数（模拟期占位，Q 回执后只改 machine.yaml 不改代码）。
-    endpoint_url 形如 opc.tcp://host:port；read_nodes.axis_pos 为 NodeId 元组，
-    其长度须与 pack_profile 匹配（v1_2_8axis＝8，契约 §6.1）。"""
+    endpoint_url 形如 opc.tcp://host:port；read_nodes 的 axis_pos／axis_vel 为 NodeId 元组，
+    **两者长度都**须与 pack_profile 匹配（v1_2_8axis＝8，契约 §6.1 的 Pos／Vel 同为 ARRAY[0..7]），
+    另含握手用的 ack／alarm_word／seq_id（回显）／cur_seg 四个单节点；
+    write_nodes 含 cmd／seq_id／seg_count／speed_override／seg_array（契约 §5.1、§9.1 步骤 1/2）。"""
 
     endpoint_url: str
     security_policy: str
