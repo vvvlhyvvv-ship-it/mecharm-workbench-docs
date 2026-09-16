@@ -24,6 +24,7 @@ from tests import cad_samples as cs
 
 # 取真正的子模块对象（包根的属性名 import_model 已被 re-export 的**函数**遮蔽）。
 _im = importlib.import_module("core.geometry.import_model")
+_ts = importlib.import_module("core.geometry.tessellate")
 
 # 结构合法但无任何几何的 STEP——等价“装配引用的零件缺失/空”，用于验证读取侧优雅报错而非崩溃。
 _EMPTY_STEP = (
@@ -142,6 +143,37 @@ def test_cache_invalidated_by_content_change(tmp_path) -> None:
     a2 = import_model(str(path))
     assert a1.source_hash != a2.source_hash
     assert a1.stats["cache"] == "miss" and a2.stats["cache"] == "miss"
+
+
+def test_brep_cache_written_and_hit_path_rebuilds_face_index(tmp_path, monkeypatch,
+                                                             _isolated_cache) -> None:
+    """整改-1：显示网格**全命中**路径仍须给出非空 face_index（T06 反查真值法向的唯一依据）。
+
+    首导入三角化同时落 mesh.npz（显示）与 ``.brep``（几何真身，键＝源哈希、仓外）；二次导入命中
+    清单（形状留空）＋命中 mesh.npz（face_index 空），必须由 ``.brep`` 读回活形状重建 face_index。
+    为证明走的是 ``.brep`` 而非「重新解析源文件」回退，把 tessellate 的 ``_parse`` 改成抛错——
+    命中路径一旦回退到 _parse 即测试失败（旧 criterion 6 抓不到「秒开路径挖空 face_index」）。
+    """
+    path = cs.assembly_step(tmp_path / "asm.step")
+    first = tessellate(import_model(str(path)), 0.5)
+    assert all(p.face_index for p in first), "首导入各部件应有 face_index"
+
+    # .brep 几何真身缓存须落盘到仓外 cache_dir，且每个零件叶子一个文件
+    brep_files = sorted((_isolated_cache / "brep").rglob("*.brep"))
+    assert len(brep_files) == 3, "3 个零件叶子各落一个 .brep（双缓存之几何真身）"
+    assert all(f.is_file() and f.stat().st_size > 0 for f in brep_files)
+
+    # 禁掉源文件重新解析：命中路径若回退到 _parse 即崩，反证 face_index 来自 .brep 缓存
+    def _boom(*_a, **_k):
+        raise AssertionError("命中路径不得回退重新解析源文件（应由 .brep 缓存重建）")
+
+    monkeypatch.setattr(_ts, "_parse", _boom)
+    second = tessellate(import_model(str(path)), 0.5)
+    assert second is not first
+    assert all(p.face_index for p in second), "全命中路径 face_index 不得为空（整改-1 核心判据）"
+    for a, b in zip(first, second):
+        assert set(b.face_index) == {int(x) for x in b.face_map}, "重建的 face_index 须覆盖 face_map 全部 face_id"
+        assert set(a.face_index) == set(b.face_index), "重建结果与首次逐 face_id 一致（面序随 .brep 保留）"
 
 
 # --------------------------------------------------------------------------- #

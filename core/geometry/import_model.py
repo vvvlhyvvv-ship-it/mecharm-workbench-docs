@@ -1,8 +1,9 @@
 """core.geometry.import_model —— STEP/IGES/STL 导入、装配树还原、is_brep 判定、几何清单缓存。
 
-装配关系走 ``STEPControl_Reader`` / ``IGESControl_Reader`` + ``TopoDS`` compound 递归分解
-（XCAF 在本机 pythonocc-core 7.9.0 不可用，详见包 ``__init__`` docstring）：层级结构保住，
-零件名自动命名。STL 走网格分支，is_brep=False。坐标单位 mm、模型自身坐标系。
+装配关系走 ``STEPControl_Reader`` / ``IGESControl_Reader`` + ``TopoDS`` compound 递归分解（XCAF 本身**可用**，
+但 ``TDocStd_Document(TCollection_ExtendedString)`` 构造重载本机退出码 127、``TDataStd_Name`` 无 ``Get``/``Find``
+读不出零件名，故不走 XCAF；详见包 ``__init__``）：层级保住、零件名自动命名。STL 走网格分支 is_brep=False。
+坐标单位 mm、模型自身坐标系。
 
 缓存：``_cache_root`` 解析 machine.yaml ``paths.cache_dir``（仓外），不可用即降级为不缓存并告警，
 **绝不回落仓内**（缓存内是甲方模型几何，远端为公开仓，04 §7.1-10）。``import_model`` 命中

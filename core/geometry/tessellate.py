@@ -6,9 +6,11 @@
 三角形反查真值法向的**唯一依据**，不落此表 T06 做不了（03 §3）。``face_map``/``face_index``
 **不下发前端**（禁前端做几何判定）。
 
-显示网格缓存：mesh.npz（每部件顶点/索引/face_map + meta），键＝源文件哈希＋deflection，落
-``paths.cache_dir`` 仓外；命中即免三角化（二次导入秒开）。几何真身在本机 pythonocc build 无法
-落盘（详见包 ``__init__``），故缓存命中重建的 Assembly 无活形状时，三角化未命中会重新解析源文件。
+双缓存（均落 ``paths.cache_dir`` 仓外、键＝源文件哈希）：① 显示网格 mesh.npz（每部件顶点/索引/
+face_map + meta），命中即免三角化（二次导入秒开）；② 几何真身 ``.brep``（见 ``core.geometry.
+brep_cache``），供命中路径重建活形状与 ``face_index``——否则全命中时 ``face_index`` 会空着，挖空
+T06 反查真值法向的唯一依据。命中显示网格后，优先由 ``.brep`` 读回形状重建 ``face_index``，``.brep``
+缺失才回退重新解析源文件。
 """
 
 from __future__ import annotations
@@ -28,6 +30,7 @@ from OCC.Core.TopExp import TopExp_Explorer
 from OCC.Core.TopLoc import TopLoc_Location
 from OCC.Core.TopoDS import topods
 
+from core.geometry.brep_cache import load_shapes, rebuild_face_index, save_shapes
 from core.geometry.import_model import (Assembly, AssemblyNode, GeometryError, _cache_root,
                                         _parse)
 
@@ -107,6 +110,7 @@ def tessellate(assembly: Assembly, deflection: float) -> list[MeshPart]:
     cached = _load_mesh(assembly.source_hash, deflection)
     if cached is not None:
         _fill_tris(assembly, cached)
+        _ensure_face_index(assembly, cached, deflection)
         assembly.stats["cache"] = "hit"
         log.info("缓存命中（显示网格）：%s，%d 个三角面",
                  pathlib.Path(assembly.source_path).name, assembly.stats["tris"])
@@ -120,10 +124,29 @@ def tessellate(assembly: Assembly, deflection: float) -> list[MeshPart]:
             parts.append(mp)
     _fill_tris(assembly, parts)
     _save_mesh(assembly.source_hash, deflection, parts)
+    save_shapes(assembly)
     log.info("三角化完成：%s，%d 个部件，%d 个三角面，弦高 %.3g mm",
              pathlib.Path(assembly.source_path).name, len(parts),
              assembly.stats["tris"], deflection)
     return parts
+
+
+def _ensure_face_index(assembly: Assembly, parts: list[MeshPart], deflection: float) -> None:
+    """显示网格命中路径下重建非空 ``face_index``（T06 反查真值法向的唯一依据）。
+
+    缓存命中的 MeshPart 来自 mesh.npz，``face_index`` 是空的。优先由 ``.brep`` 几何真身缓存读回
+    活形状（其三角化随 ``.brep`` 一并保留，免解析源文件）；``.brep`` 缺失才回退重新解析源文件，
+    并按同 deflection 重新三角化以恢复各面的三角化状态，最后按 ``face_map`` 重建 face_index。
+    面片模型（is_brep=False）无 B-Rep 真值法向语义，跳过。
+    """
+    if not assembly.is_brep:
+        return
+    if not load_shapes(assembly):
+        _attach_shapes_if_needed(assembly)
+        for node in assembly.iter_parts():
+            if node.shape is not None and not node.shape.IsNull():
+                BRepMesh_IncrementalMesh(node.shape, deflection, False, _ANG_DEFLECTION, False)
+    rebuild_face_index(assembly, parts)
 
 
 def _fill_tris(assembly: Assembly, parts: list[MeshPart]) -> None:

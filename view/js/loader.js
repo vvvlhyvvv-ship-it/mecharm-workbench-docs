@@ -16,6 +16,7 @@ import * as THREE from "../vendor/three.module.js";
 const BG = 0x16202a;            // 与 app.css --bg-deep 一致（02 §4 深色底，防白屏）
 const BASE = 0x8a97a3;          // 零件常态色：深色金属灰
 const SEM = { ok: 0x2f6feb, warn: 0xd9a520, deny: 0xb3261e };  // 02 §4 颜色语义
+const VFOV_DEG = 45;            // 透视相机竖直视场角（单点定义，flyTo 取景与 init 共用）
 
 let renderer, scene, camera, host, emptyEl;
 let group;                       // 全部部件 Mesh 的容器
@@ -31,7 +32,7 @@ function init() {
   renderer.setClearColor(BG, 1);
   host.appendChild(renderer.domElement);
   scene = new THREE.Scene();
-  camera = new THREE.PerspectiveCamera(45, 1, 0.1, 100000);
+  camera = new THREE.PerspectiveCamera(VFOV_DEG, 1, 0.1, 100000);
   group = new THREE.Group();
   scene.add(group);
   scene.add(new THREE.HemisphereLight(0xffffff, 0x3a4652, 0.9));
@@ -155,7 +156,17 @@ function onHighlight(payload) {
 
 function flyTo(box) {
   target.copy(box.getCenter(new THREE.Vector3()));
-  orbit.radius = Math.max(box.getSize(new THREE.Vector3()).length() * 1.4, 1);
+  // 取景须同时装下竖直与水平两个视场。透视相机 FOV 标的是**竖直**方向，水平视场随 aspect 变化：
+  // tan(半水平FOV) = aspect · tan(半竖直FOV)。竖窄视口（aspect<1，如 320×500 / 431×625 竖屏）水平
+  // 视场更窄，若只按对角线·竖直FOV 取半径，模型会被左右切到贴边（整改-2 实测：x1=w−1）。
+  // 故按外接球半径分别算竖直/水平所需距离，取较大者——横屏归竖直、竖屏归水平，两向都不裁切。
+  const sphereR = Math.max(box.getSize(new THREE.Vector3()).length() / 2, 1e-6);
+  const halfV = (VFOV_DEG * Math.PI / 180) / 2;
+  const aspect = camera.aspect > 0 ? camera.aspect : 1;
+  const halfH = Math.atan(Math.tan(halfV) * aspect);
+  const distV = sphereR / Math.sin(halfV);
+  const distH = sphereR / Math.sin(halfH);
+  orbit.radius = Math.max(distV, distH, 1) * 1.06;   // 6% 余量，确保前景包围盒四边不贴边
 }
 
 function fitAll() {
