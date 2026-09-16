@@ -1,4 +1,5 @@
-// evidence/T07/_probe.mjs — 取证探针（⛔ 非交付件、⛔ 不放 view/，只由 _drive_shell_path.py 动态注入）。
+// evidence/T07/_probe.mjs — 取证探针（⛔ 非交付件、⛔ 不放 view/，只由 _drive_shell_path.py 与
+// _diag_fps_throttle.py 动态注入）。
 //
 // 为什么需要它：loader.js 把 scene／renderer 留在模块私有变量，path.js 也一样 ⇒ 页面上下文里
 // 拿不到场景图，无法直接核对「视口画了什么」。本探针与 path.js 共用**同一个** three 模块实例
@@ -17,6 +18,25 @@ proto.add = function (child) {
 function round(value) {
   return Math.round(value * 1e6) / 1e6;
 }
+
+// 取证脚手架：常驻**裸 rAF 心跳**（只计数、⛔ 不渲染、⛔ 不碰场景），按 500 ms 窗口算帧率。
+// 用途＝把「宿主把整页帧调度掐了」与「path.js 自己的循环停转」区分开：两者同低（实测同为 0.7fps）
+// ⇒ 节流在宿主侧，该轮 perf.fps 作废；心跳高而角标低 ⇒ 才是本单代码问题。节流的成因已用
+// `_diag_fps_throttle.py` 三段对照排除（单帧回调 p50 0.1ms／max 2.1ms、`view.grab()` 无关、
+// WebGL 走 ANGLE D3D11 硬件渲染、空页与真页面本底均 60fps），只余宿主 BeginFrame 调度这一项，
+// 且**间歇**发生（四旗标全开＋窗体活动时也会掉到 1~7fps）。⚠️ 心跳自己也在 rAF 上，故它只能作
+// 判别器、⛔ 不能用来解除节流（曾指望多一条 rAF 把合成器唤醒，实测无效）。
+let beats = 0, heartbeatFps = 0, beatSince = performance.now();
+function heartbeat(now) {
+  beats += 1;
+  if (now - beatSince >= 500) {
+    heartbeatFps = Math.round((beats * 1000) / Math.max(now - beatSince, 1) * 10) / 10;
+    beats = 0;
+    beatSince = now;
+  }
+  requestAnimationFrame(heartbeat);
+}
+requestAnimationFrame(heartbeat);
 
 function colorOf(obj) {
   const mat = obj.material || (obj.line && obj.line.material) || null;
@@ -50,6 +70,7 @@ window.__probe = {
     const items = mine();     // 活对象（仍在场景图上）
     return {
       added_total: seen.length,
+      heartbeat_fps: heartbeatFps,
       lines: items.filter((o) => /^path-seg-/.test(o.name)).length,
       arrows: items.filter((o) => o.type === "ArrowHelper").length,
       markers: items.filter((o) => o.name === "tool-marker").length,
