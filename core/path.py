@@ -35,9 +35,11 @@ import math
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from core.kinematics.fk import fk
 from core.kinematics.ik import Chain, IkError, ik
 from core.kinematics.limits import check_limits
-from core.kinematics.transform import CoordFrame, Point, model_to_device, translation
+from core.kinematics.transform import (CoordFrame, Point, Transform4x4, model_to_device, multiply,
+                                       translation)
 
 if TYPE_CHECKING:  # 只取类型：core.path ⛔ 不依赖 OCC／numpy（face_point 运行期要二者）
     from core.config.schema import MachineConfig
@@ -145,6 +147,31 @@ def summarize(segments: list[Segment]) -> PathSummary:
                        total_length_mm=sum(seg.length_mm for seg in segments),
                        total_duration_s=sum(seg.duration_s for seg in segments),
                        blocked_count=sum(1 for seg in segments if seg.blocked))
+
+
+def frame_inverse(frame: CoordFrame) -> CoordFrame:
+    """`CoordFrame` 的逆框（上层框→本框）：旋转取转置、原点取 −Rᵀ·origin。
+
+    `transform` 只给**点**的逆变换（`device_to_model`），位姿的逆变换须自己组逆框——本函数只用
+    公开 API 组框（建框即校验正交归一，故转置阵不合法时会当场拒），⛔ 不改 T04 已验收件。
+    """
+    rows = frame.rotation
+    transposed = tuple(rows[col * 3 + row] for row in range(3) for col in range(3))
+    origin = tuple(-sum(rows[col * 3 + row] * frame.origin_mm[col] for col in range(3))
+                   for row in range(3))
+    return CoordFrame(origin, transposed)
+
+
+def tool_pose_in_model(joints: dict[str, float], chain: Chain, frame: CoordFrame) -> Transform4x4:
+    """关节输入 → 工具安装面在**模型坐标系**内的位姿（16 元素**行主序**，mm）。
+
+    ＝ `fk` 的设备框位姿左乘 `frame` 的逆框。播放每帧调一次：壳侧插值出关节、经此得到与视口里
+    模型**同空间**的位姿，再 `to_column_major` 上屏（03 §5 口径：core 全链行主序、three.js 列主序）。
+    末端取 `chain.effective_end`——请求的 `end_link`（如现场链的 flange）是被动连杆、已被摘除，
+    其位姿与 effective_end 同源（见 `derive_chain`）。
+    """
+    device = fk(joints, chain.model)[chain.effective_end]
+    return multiply(frame_inverse(frame).matrix(), device)
 
 
 def _speed(cfg: MachineConfig, kind: str) -> float:

@@ -23,7 +23,8 @@ from core.config import REPO_ROOT, Axis, Coupling, Link, load_machine
 from core.geometry.face_point import Waypoint
 from core.kinematics import (PRISMATIC, CoordFrame, axis_swap_frame, derive_chain, fk,
                              model_to_device, resolve_positions)
-from core.path import KIND_CONTOUR, KIND_POINT, gen_path, summarize
+from core.path import (KIND_CONTOUR, KIND_POINT, frame_inverse, gen_path, summarize,
+                       tool_pose_in_model)
 
 MINIMAL = pathlib.Path(__file__).resolve().parent / "fixtures" / "ok_minimal.yaml"
 PATH_SOURCE = (REPO_ROOT / "core" / "path.py").read_text(encoding="utf-8")
@@ -228,6 +229,22 @@ def test_frame_is_applied_before_ik_but_segments_stay_in_model_units():
     assert _eng_x(seg.joints_end) == pytest.approx(1200.0, abs=1e-9)
     assert seg.length_mm == pytest.approx(200.0, abs=1e-9)
     assert seg.start_mm == (0.0, 0.0, 0.0) and seg.end_mm == (200.0, 0.0, 0.0)
+
+
+def test_tool_pose_for_playback_lands_back_in_the_model_frame():
+    """用例⑥（播放通道）：`tool_pose_in_model` 的平移＝该段终点的**模型**坐标。
+
+    手算：设备框原点相对模型框偏 (1000,0,0)，P2 模型 (200,0,0) ⇒ 设备 1200 ⇒ 逆框映回 200。
+    旋转部分保持单位阵（现链全移动副，工具姿态由安装固定）；`frame_inverse` 往返回原框。
+    """
+    shifted = CoordFrame((1000.0, 0.0, 0.0), FRAME.rotation)
+    seg = gen_path([_wp(1, 0, 0, 0), _wp(2, 200, 0, 0)], SITE_CFG, SITE_CHAIN, shifted)[0]
+    pose = tool_pose_in_model(seg.joints_end, SITE_CHAIN, shifted)
+    assert (pose[3], pose[7], pose[11]) == pytest.approx(seg.end_mm, abs=1e-9)
+    assert [pose[index] for index in (0, 5, 10)] == pytest.approx([1.0, 1.0, 1.0], abs=1e-12)
+    back = frame_inverse(frame_inverse(shifted))
+    assert back.origin_mm == pytest.approx(shifted.origin_mm, abs=1e-9)
+    assert back.rotation == pytest.approx(shifted.rotation, abs=1e-12)
 
 
 def test_waypoint_normal_does_not_participate():
