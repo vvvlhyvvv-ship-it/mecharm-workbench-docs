@@ -8,8 +8,9 @@ T02 阶段内核未接入，全部用占位数据；本模块只做布局 + 外�
   视口加载失败 → 日志（错误卡在 viewpane 内显示）
   T06：pick.face → core 换算真实点/真法向 → 步骤②点位列表；列表变化 → pick.enable 推标号牌；
        进/退步骤② 切拾取态（半透明＋十字光标）；F3 → 结果作废（清空点位＋视口标号牌）
-  T07：步骤③路径生成与播放动画的业务在 app/pathctl.py（本模块只构造它、接 changed 信号重算
-       ④⑤门禁、并在换臂/F3/新模型三处先行作废路径）——本文件已近 300 行上限，业务不得内联
+  T07/T08：③④⑤的业务分别在 app/pathctl.py 与 app/checkctl.py（本模块只构造它们、接 changed 信号
+       重算门禁、并在换臂/F3/新模型三处先行作废路径）；⑤是否可达改由 checkctl.ready() 决定＝禁发双
+       阻断第①条，第②条在 send_path() 入口内——本文件已贴 300 行上限，业务一律不得内联
 颜色/字号一律走 app.theme 全局 QSS，本模块不写内联样式。
 """
 
@@ -33,6 +34,7 @@ from PySide6.QtGui import QKeySequence, QShortcut
 
 from app.assemblytree import AssemblyTree
 from app.bridge import Bridge
+from app.checkctl import CheckController
 from app.mode import ModeBadge, OnlineLight, WorkModeSelector
 from app.panel import Panel
 from app.pathctl import PathController
@@ -73,6 +75,8 @@ class MainWindow(QMainWindow):
         self.panel = Panel()
         self.statusbar = StatusBar()
         self.pathctl = PathController(self.panel, self.bridge, self.stepbar, self.statusbar, self)
+        self.checkctl = CheckController(self.panel, self.bridge, self.stepbar, self.statusbar,
+                                        self.pathctl, self.workmode, self)
 
         central = QWidget()
         col = QVBoxLayout(central)
@@ -147,9 +151,7 @@ class MainWindow(QMainWindow):
         self.workmode.committed.connect(self._on_mode_committed)
         self.workmode.switched.connect(self._on_mode_switched)
         self.bridge.received.connect(self._on_bridge_msg)
-        self.viewpane.load_failed.connect(
-            lambda reason: self.statusbar.log(reason.replace("\n", " "))
-        )
+        self.viewpane.load_failed.connect(lambda r: self.statusbar.log(r.replace("\n", " ")))
         self.viewpane.view().loadFinished.connect(self._on_view_load)
         self.panel.step1.imported.connect(self._on_imported)
         self.panel.step1.failed.connect(lambda msg: self.statusbar.log(f"导入未成功：{msg}"))
@@ -157,6 +159,7 @@ class MainWindow(QMainWindow):
         self.panel.step2.log.connect(self.statusbar.log)
         self.panel.step2.set_mode(None)        # 初始未选定工作模式 → 步骤②锁定
         self.pathctl.changed.connect(self._refresh_unlock)   # 路径生成/作废 → 重算④⑤门禁
+        self.checkctl.changed.connect(self._refresh_unlock)  # 校核结论/指纹变化 → 重算⑤门禁（T08）
         f3 = QShortcut(QKeySequence("F3"), self)
         f3.activated.connect(self._on_invalidate_results)
         self.tree.selected.connect(self._on_tree_selected)
@@ -185,8 +188,7 @@ class MainWindow(QMainWindow):
 
     def _on_bridge_msg(self, type_: str, data: object) -> None:
         if type_ == "pick.face":
-            self._on_pick_face(data)
-            return
+            return self._on_pick_face(data)
         self.statusbar.log(f"桥 echo：收到 {type_} {data}")
 
     def _on_pick_face(self, data: object) -> None:
@@ -238,9 +240,10 @@ class MainWindow(QMainWindow):
         base = self._mode_ok and self._brep_ok
         for n in (2, 3):
             self.stepbar.set_step_enabled(n, base)
-        # 步骤④⑤另需路径已生成且无不可达段（完成标准②：越界→无法进入④）
-        for n in (4, 5):
-            self.stepbar.set_step_enabled(n, base and self.pathctl.ready())
+        # 步骤④另需路径已生成且无不可达段（完成标准②：越界→无法进入④）；步骤⑤再需校核结论非干涉
+        # 且路径指纹一致（T08 禁发双阻断第①条：按钮置灰；第②条在 checkctl.send_path() 入口内）
+        self.stepbar.set_step_enabled(4, base and self.pathctl.ready())
+        self.stepbar.set_step_enabled(5, base and self.checkctl.ready())
 
     def _on_imported(self, res: object) -> None:
         asm = res["asm"]
