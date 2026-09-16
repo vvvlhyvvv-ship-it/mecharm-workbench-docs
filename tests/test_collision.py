@@ -115,6 +115,7 @@ def test_three_verdicts_follow_the_hand_computed_gap(x0, verdict, dist):
     case = result.cases[0]
     assert case.min_dist_mm == pytest.approx(dist, abs=1e-9)
     assert (case.seg_id, case.part_a, case.part_b) == (1, "slide", "自造板")
+    assert tuple(round(v, 6) for v in case.box) == (-3.0, -3.0, -3.0, 403.0, 3.0, 3.0)
 
 
 def test_precise_distance_is_b_rep_not_a_bounding_box_or_a_mesh():

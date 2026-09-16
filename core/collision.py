@@ -5,15 +5,14 @@
 `limits.collision_envelope_mm` 外扩＝契约 §8.4）→ 与障碍几何（导入模型的 B-Rep 真身）先 AABB 粗筛、
 命中者用 OCC `BRepExtrema_DistShapeShape` 取最小距离真值 → 三态：d≤0 干涉／d<安全间隙预警／通过。
 参数一律读配置 ⛔ 无字面量散写；⛔ 不用显示网格距离冒充 B-Rep 距离；⛔ 判定不在前端（G13）。
-⚠️ 三处口径限制都是**数据缺口**、不是偷懒（详见 T08 交付汇报报备项）：① 机械臂没有真几何——
-`links.length_mm` 全为占位 0.0、且 11 根臂专用轴在 `links:` 表无连杆（G19 禁自行补链）⇒ 代理盒只是
-「连杆原点连线＋包络」：是真 B-Rep 实体、距离也是 OCC 真值，但臂截面尺寸无配置源 ⇒ 结论一律带覆盖面
-限定；② 障碍只有导入模型——模具／周边设备无配置数据源（machine.yaml ⛔ 只读）⇒ 缺谁就没校核谁；
-③ 采样是关节空间线性插值——契约 §8.3 的 PLC 插补偏差正是 §8.4 包络存在的原因。
-**签名偏离（报备，处置口径同 T06 的 `face_point_from_tri`）**：03 §3 冻结签名
-`check(path, clearance_warn_mm)` 没有任何几何来源（障碍形状／配置／运动学链／坐标框都取不到），按
-字面无法实现 ⇒ 把数据源 `scene: CollisionScene` 作显式入参插在 `path` 之后（同 T04 `fk(joint_
-values, model)` 先例），零硬编码、⛔ 未改 machine.yaml；请指挥方回填 03 §3 本行。
+⚠️ 三处口径限制都是**数据缺口**、不是偷懒（详见 T08 交付汇报报备项）：① 机械臂没有真几何——`links.
+length_mm` 全为占位 0.0、且 11 根臂专用轴在 `links:` 表无连杆（G19 禁自行补链）⇒ 代理盒只是「连杆原
+点连线＋包络」：是真 B-Rep 实体、距离也是 OCC 真值，但臂截面尺寸无配置源 ⇒ 结论一律带覆盖面限定；
+② 障碍只有导入模型——模具／周边设备无配置数据源（machine.yaml ⛔ 只读）⇒ 缺谁就没校核谁；③ 采样
+是关节空间线性插值——契约 §8.3 的 PLC 插补偏差正是 §8.4 包络存在的原因。
+**签名偏离（报备，口径同 T06 `face_point_from_tri`）**：冻结签名 `check(path, clearance_warn_mm)`
+没有任何几何来源（障碍／配置／链／坐标框都取不到）⇒ 把 `scene: CollisionScene` 作显式入参插在
+`path` 之后（同 T04 `fk(joint_values, model)` 先例），零硬编码；请指挥方回填 03 §3 本行。
 """
 
 from __future__ import annotations
@@ -68,13 +67,15 @@ class Obstacle:
 
 @dataclass(frozen=True)
 class CollisionCase:
-    """一条干涉／预警记录（03 §3 冻结的五键）。`point`＝两侧最近点的中点（干涉时重合），在**模型
-    坐标系**内（与障碍几何、`Segment.start_mm` 同空间）⇒ 视口可直接定位，⛔ 前端不换算。"""
+    """一条干涉／预警记录（03 §3 冻结的五键＋`box`）。`point`＝两侧最近点的中点（干涉时重合），在
+    **模型坐标系**内（与障碍几何、`Segment.start_mm` 同空间）⇒ 视口直接定位 ⛔ 前端不换算；`box`＝
+    命中时臂侧的保守代理盒（视口画红线框＝「双方红色高亮」的臂侧一方；障碍侧走 `hl.set`）。"""
     seg_id: int
     part_a: str
     part_b: str
     min_dist_mm: float
     point: tuple[float, float, float]
+    box: Box | None = None
 
 
 @dataclass(frozen=True)
@@ -106,10 +107,9 @@ class CollisionResult:
         return f"已建模的 {self.modeled_links} 根连杆范围内 {tail.get(self.verdict, '未检出碰撞')}"
 
     def coverage(self) -> str:
-        """G19 第 2 条：未建模臂属**判定空白**、不是判定为安全 ⇒ 只有 N=0 才说覆盖全部轴。N＝当前
-        模式里在 `links:` 表没有连杆的轴数（现算 ⛔ 禁写死 11）。卡片 mandated 文案把这 N 根轴称作
-        「N 根未建模臂」而一个模式只挂一套臂 ⇒ 措辞有歧义；本件按卡片原文出句、附轴名清单让数字可
-        核，该歧义已登记为报备项请指挥方裁决。"""
+        """G19 第 2 条：未建模臂属**判定空白**、不是判定为安全 ⇒ 只有 N=0 才说覆盖全部轴。N＝当前模式
+        里在 `links:` 表没有连杆的轴数（现算 ⛔ 禁写死 11）。卡片文案把这 N 根轴称作「N 根未建模臂」而
+        一个模式只挂一套臂 ⇒ 措辞有歧义；本件按卡片原文出句＋附轴名清单让数字可核，歧义已报备请裁决。"""
         if not self.unmodeled_axes:
             return "本模式的轴全部已建模，结论覆盖本模式所用的全部臂"
         return (f"本模式含 {len(self.unmodeled_axes)} 根未建模臂，其干涉未校核"
@@ -217,7 +217,7 @@ def _judge_pose(worst: dict[tuple[int, str, str], CollisionCase], seg_id: int,
                 continue
             key = (seg_id, link_id, obstacle.name)
             if key not in worst or dist < worst[key].min_dist_mm:
-                worst[key] = CollisionCase(seg_id, link_id, obstacle.name, dist, point)
+                worst[key] = CollisionCase(seg_id, link_id, obstacle.name, dist, point, arm_box)
 
 
 def _proxy_boxes(joints: dict[str, float], scene: CollisionScene) -> list[tuple[str, Box]]:
