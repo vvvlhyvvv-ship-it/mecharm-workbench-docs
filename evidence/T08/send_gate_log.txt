@@ -1,0 +1,108 @@
+
+*******************************************************************
+******        Statistics on Transfer (Write)                 ******
+
+*******************************************************************
+******        Transfer Mode = 0  I.E.  As Is       ******
+******        Transferring Shape, ShapeType = 2                      ******
+** WorkSession : Sending all data
+ Step File Name : C:\Users\LIHAOY~1\AppData\Local\Temp\t08_8zq77f_e\obstacle_1.step(350 ents)  Write  Done
+模型框→设备框无配置源（契约 §7.1 待确认）：本次按同向重合框处理，回执到后只改配置、不改代码
+
+*******************************************************************
+******        Statistics on Transfer (Write)                 ******
+
+*******************************************************************
+******        Transfer Mode = 0  I.E.  As Is       ******
+******        Transferring Shape, ShapeType = 2                      ******
+** WorkSession : Sending all data
+ Step File Name : C:\Users\LIHAOY~1\AppData\Local\Temp\t08_8zq77f_e\obstacle_2.step(350 ents)  Write  Done
+
+*******************************************************************
+******        Statistics on Transfer (Write)                 ******
+
+*******************************************************************
+******        Transfer Mode = 0  I.E.  As Is       ******
+******        Transferring Shape, ShapeType = 2                      ******
+** WorkSession : Sending all data
+ Step File Name : C:\Users\LIHAOY~1\AppData\Local\Temp\t08_8zq77f_e\obstacle_3.step(350 ents)  Write  Done
+
+*******************************************************************
+******        Statistics on Transfer (Write)                 ******
+
+*******************************************************************
+******        Transfer Mode = 0  I.E.  As Is       ******
+******        Transferring Shape, ShapeType = 2                      ******
+** WorkSession : Sending all data
+ Step File Name : C:\Users\LIHAOY~1\AppData\Local\Temp\t08_8zq77f_e\obstacle_4.step(350 ents)  Write  Done
+
+*******************************************************************
+******        Statistics on Transfer (Write)                 ******
+
+*******************************************************************
+******        Transfer Mode = 0  I.E.  As Is       ******
+******        Transferring Shape, ShapeType = 2                      ******
+** WorkSession : Sending all data
+ Step File Name : C:\Users\LIHAOY~1\AppData\Local\Temp\t08_8zq77f_e\obstacle_5.step(350 ents)  Write  Done
+
+*******************************************************************
+******        Statistics on Transfer (Write)                 ******
+
+*******************************************************************
+******        Transfer Mode = 0  I.E.  As Is       ******
+******        Transferring Shape, ShapeType = 2                      ******
+** WorkSession : Sending all data
+ Step File Name : C:\Users\LIHAOY~1\AppData\Local\Temp\t08_8zq77f_e\obstacle_6.step(350 ents)  Write  Done
+取证环境: 3.11.16 ｜工作模式: 打磨臂 ｜短路径点位: ((0.0, 0.0, 0.0), (100.0, 0.0, 0.0))
+
+=== F. 干涉态直调 send_path()：按钮已置灰，函数入口再独立判一次 ===
+  ⑤按钮可用: False (期望 False＝双阻断第①条)
+  ⑤旁注: 校核未通过，无法下发：⛔ 第 1 段与【零件_1】干涉，已禁止下发（步骤⑤按钮置灰，且下发函数入口会再独立判一次）
+  直调 send_path() → False (期望 False＝双阻断第②条)
+  拒发日志: ['WARNING app.checkctl: 下发被拒（send_path 入口独立复判）：校核未通过，无法下发：⛔ 第 1 段与【零件_1】干涉，已禁止下发（步骤⑤按钮置灰，且下发函数入口会再独立判一次）']
+  状态栏: [06:24:40] 已拒绝下发：校核未通过，无法下发：⛔ 第 1 段与【零件_1】干涉，已禁止下发（步骤⑤按钮置灰，且下发函数入口会再独立判一次）
+
+=== G1. 改一个点位（真链路）：旧校核结果当场作废，⑤恒禁用 ===
+  改点前 ⑤按钮: True ｜指纹: 11788b6851b8b774
+  改点后 ⑤按钮: False ｜旁注: 尚未做碰撞校核，无法下发：先在步骤④点[开始校核]
+  改点后 send_path() → False
+  作废与拒发日志: ['INFO app.checkctl: 步骤⑤下发按钮已置灰：尚未做碰撞校核，无法下发：先在步骤④点[开始校核]'] ['WARNING app.checkctl: 下发被拒（send_path 入口独立复判）：尚未做碰撞校核，无法下发：先在步骤④点[开始校核]']
+  状态栏: [06:24:41] 已拒绝下发：尚未做碰撞校核，无法下发：先在步骤④点[开始校核]
+
+=== G2. 故障注入：绕过作废信号直接换段序列 ⇒ 指纹失配必须独立拒发 ===
+  校核时指纹: 11788b6851b8b774
+  换段后指纹: fbd99c22f6e1d1f4 ｜⑤按钮仍显示: True (按钮读的是旧状态)
+  直调 send_path() → False (期望 False：入口重算指纹 ⇒ 失配拒发)
+  拒发日志: ['WARNING app.checkctl: 下发被拒（send_path 入口独立复判）：路径已改动，无法下发：旧校核结果已失效，须重新校核']
+  旁注: 路径已改动，无法下发：旧校核结果已失效，须重新校核
+
+=== H. 通过态 send_path()：弹窗默认按钮＝[取消]，两条出口各留日志 ===
+  点[取消] → send_path() False ｜日志: ['INFO app.checkctl: 下发已取消：操作员在确认弹窗点了[取消]']
+  点[确认下发] → send_path() True
+  确认日志: ['INFO app.checkctl: 下发请求已确认（结论 pass、1 段、指纹 11788b6851b8b774）：PLC 下发通道由 T10 接入']
+  状态栏: [06:24:41] 下发请求已确认：本机尚未接入 PLC 下发通道（由后续单交付），本次只完成禁发复判
+
+=== I. 20 段路径校核耗时（自造 40 mm 立方障碍在 x=603，被路径扫过＝精判全触发） ===
+  导入成功: True
+  第 1 轮: 段数 20｜采样姿态 21｜障碍 1 个｜结论 🔴 interfere｜耗时 70.5 ms
+  第 2 轮: 段数 20｜采样姿态 21｜障碍 1 个｜结论 🔴 interfere｜耗时 68.9 ms
+  第 3 轮: 段数 20｜采样姿态 21｜障碍 1 个｜结论 🔴 interfere｜耗时 78.6 ms
+  core 耗时日志: ['INFO core.collision: 碰撞校核 20 段／21 采样姿态／13 根已建模连杆／1 个障碍，耗时 78.6 ms → interfere']
+  右栏实测数字行: 共 21 个采样姿态 · 校核耗时 78.6 ms · 已建模连杆 13 根
+
+=== J. G19 覆盖面：N 一律从 machine.yaml 现算 ===
+  links 表现算已建模连杆数: 13 ｜全机轴数: 22 ｜全机未建模轴数: 11
+  模式「打磨臂」: 轴 ('X1', 'Z1', 'Y1', 'X2', 'Z2', 'X3', 'ZA1', 'ZA2', 'RA')｜N=3｜('ZA1', 'ZA2', 'RA')
+  模式「氧化皮吸附臂」: 轴 ('X1', 'Z1', 'Y1', 'X2', 'Z2', 'X3', 'ZB', 'FB1', 'FB2')｜N=3｜('ZB', 'FB1', 'FB2')
+  模式「脱模剂喷涂臂」: 轴 ('X1', 'Z1', 'Y1', 'X2', 'Z2', 'X3', 'ZC', 'FC', 'RC')｜N=3｜('ZC', 'FC', 'RC')
+  模式「氧化皮破碎臂」: 轴 ('X1', 'Z1', 'Y1', 'X2', 'Z2', 'X3', 'ZD')｜N=1｜('ZD',)
+  模式「玻璃垫放置臂」: 轴 ('X1', 'Z1', 'Y1', 'X2', 'Z2', 'X3', 'KE')｜N=1｜('KE',)
+  本取证工况（打磨臂）UI 标注: 本模式含 3 根未建模臂，其干涉未校核（未建模轴：ZA1、ZA2、RA）
+  N=0 对照（合成配置：模式只挂 X1，X1 有连杆）: N=0｜()
+  N=0 结论: pass ｜ 已建模的 2 根连杆范围内 未检出碰撞 ｜ 本模式的轴全部已建模，结论覆盖本模式所用的全部臂
+
+=== K. 包络承重性：间隙 5 mm 的同一工况，包络 3.0 mm（配置值）vs 12.0 mm（内存副本） ===
+  包络 3.0 mm: 🟡 warn｜最近距离 5.000 mm｜臂侧代理盒 [63.667, -3.0, -3.0, 103.0, 3.0, 3.0]
+  包络 12.0 mm: 🔴 interfere｜最近距离 0.000 mm｜臂侧代理盒 [54.667, -12.0, -12.0, 112.0, 12.0, 12.0]
+  判据: 几何与路径完全相同、只改包络 ⇒ 判定翻转即证明包络参与判定（非摆设）: 对
+  配置文件未改（取证只在内存里换副本）: 3.0

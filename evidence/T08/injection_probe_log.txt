@@ -1,0 +1,33 @@
+沙箱: C:\Users\LIHAOY~1\AppData\Local\Temp\t08_inject_wvj03wf8\repo（D:\ZCode项目\多功能机械臂软件-wt\t08 的副本，⛔ 未动工作树）
+
+=== 0. 基线：沙箱内目标测试全绿（证明沙箱没坏、失败只可能来自注入）===
+    24 passed in 0.88s
+  rc=0｜失败 0 条｜对
+
+=== 1. 注入缺陷：预警带失效：有命中也报 pass（三态塌成两态） ===
+    3 failed, 21 passed in 1.02s
+  rc=1（须 1＝断言失败，⛔ 不是 2＝收集错误）｜失败 3 条:
+    FAILED test_three_verdicts_follow_the_hand_computed_gap[408.0-warn-5.0]
+    FAILED test_precise_distance_is_b_rep_not_a_bounding_box_or_a_mesh
+    FAILED test_collision_envelope_is_a_load_bearing_parameter
+  判据: rc=1 且 目标集全被咬住 且 无目标外失败 ⇒ 对｜推理目标: ['test_collision_envelope_is_a_load_bearing_parameter', 'test_precise_distance_is_b_rep_not_a_bounding_box_or_a_mesh', 'test_three_verdicts_follow_the_hand_computed_gap[408']｜目标外失败: 无
+
+=== 2. 注入缺陷：包络被偷改减半：代理盒外扩量不再等于配置值（§8.4 保守包络成摆设） ===
+    6 failed, 18 passed in 0.97s
+  rc=1（须 1＝断言失败，⛔ 不是 2＝收集错误）｜失败 6 条:
+    FAILED test_three_verdicts_follow_the_hand_computed_gap[398.0-interfere-0.0]
+    FAILED test_three_verdicts_follow_the_hand_computed_gap[408.0-warn-5.0]
+    FAILED test_precise_distance_is_b_rep_not_a_bounding_box_or_a_mesh
+    FAILED test_collision_envelope_is_a_load_bearing_parameter
+    FAILED test_cases_are_sorted_worst_first_and_one_per_link_obstacle_pair
+    FAILED test_collision_module_has_no_magic_axis_numbers
+  判据: rc=1 且 目标集全被咬住 且 无目标外失败 ⇒ 对｜推理目标: ['test_cases_are_sorted_worst_first_and_one_per_link_obstacle_pair', 'test_collision_envelope_is_a_load_bearing_parameter', 'test_collision_module_has_no_magic_axis_numbers', 'test_precise_distance_is_b_rep_not_a_bounding_box_or_a_mesh', 'test_three_verdicts_follow_the_hand_computed_gap[398', 'test_three_verdicts_follow_the_hand_computed_gap[408']｜目标外失败: 无
+
+=== 3. 注入缺陷：G19 措辞松口：通过态说「通过」（未建模臂的判定空白被抹平） ===
+    2 failed, 22 passed in 0.95s
+  rc=1（须 1＝断言失败，⛔ 不是 2＝收集错误）｜失败 2 条:
+    FAILED test_verdict_wording_never_reads_as_an_overall_pass
+    FAILED test_site_config_run_counts_every_modeled_link_including_passive_ones
+  判据: rc=1 且 目标集全被咬住 且 无目标外失败 ⇒ 对｜推理目标: ['test_site_config_run_counts_every_modeled_link_including_passive_ones', 'test_verdict_wording_never_reads_as_an_overall_pass']｜目标外失败: 无
+
+注入探针结论：三条判据各被推理出的用例咬住（rc=1 真失败），基线全绿。
