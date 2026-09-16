@@ -212,7 +212,7 @@ def _allocate(total: float, names: Sequence[str], seeds: Sequence[float],
     highs = [bound[1] for bound in bounds]
     if total < sum(lows) - _POSE_TOL or total > sum(highs) + _POSE_TOL:
         raise IkError(f"{'／'.join(names)} 合不出 {total:g} mm：行程合计只到 "
-                      f"[{sum(lows):g}, {sum(highs):g}] mm（各轴行程见 machine.yaml）")
+                      f"[{sum(lows):g}, {sum(highs):g}] mm（各轴行程以设备参数表为准）")
     values = [min(max(seed, low), high) for seed, low, high in zip(seeds, lows, highs)]
     free = set(range(len(seeds)))
     for _ in range(len(seeds) + 1):

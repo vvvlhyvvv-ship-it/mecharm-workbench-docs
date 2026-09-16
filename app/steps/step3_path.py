@@ -34,7 +34,10 @@ _COLS = ("段号", "起点→终点", "类型", "长度 mm")
 _KIND_ITEMS = ((KIND_POINT, "点位型（空程快速）"), (KIND_CONTOUR, "轮廓型（作业速度）"))
 _TYPE_NAMES = {"JOINT": "点位", "LINE": "直线"}
 _EMPTY_HINT = "尚未生成路径：先在步骤②取点，再点[生成路径]"
-_BLEND_NOTE = "电Q-8（下发轨迹段格式）未回执，默认逐段到达；开启只改段携带的标志位"
+# ⚠️ 电Q-8（下发轨迹段格式）未回执：勾选只改段携带的 `blending` 标志位，不改几何与时长；
+# 上屏文案按 02 §4「全中文」给操作员说法，⛔ 不带内部编号与英文术语。
+_BLEND_TELL = ("开启后各段之间不停顿、直接过渡到下一段。机台侧接收格式尚未确认，"
+               "当前只作标记，不改变走位与节拍")
 _DENY = QColor(TOKENS["deny"])        # 02 §4 报警红＝视口 loader 的 SEM.deny，同一口径
 _ACCENT = QColor(TOKENS["accent"])    # 当前段高亮＝当前步高亮蓝
 
@@ -68,9 +71,9 @@ class Step3Pane(QWidget):
         for value, text in _KIND_ITEMS:
             self._kind.addItem(text, value)
         self._kind.currentIndexChanged.connect(self._on_option_changed)
-        self._blend = QCheckBox("连续过渡（blending，默认关）")
+        self._blend = QCheckBox("连续过渡（默认关）")
         self._blend.setChecked(False)          # 完成标准③：默认 False
-        self._blend.setToolTip(_BLEND_NOTE)
+        self._blend.setToolTip(_BLEND_TELL)
         self._blend.toggled.connect(self._on_blend_toggled)
         self._hint = QLabel(_EMPTY_HINT)
         self._hint.setObjectName("PlaceholderBody")
@@ -231,8 +234,9 @@ class Step3Pane(QWidget):
         self.clear()
 
     def _on_blend_toggled(self, on: bool) -> None:
-        """勾选 blending 只改段携带的标志位；电Q-8 未回执 ⇒ 当场人话告警，不静默生效。"""
+        """勾选连续过渡只改段携带的 `blending` 标志位；电Q-8 未回执 ⇒ 当场人话告警，不静默生效。"""
         if self._summary is not None:
-            self.option_changed.emit("连续过渡（blending）开关")
+            self.option_changed.emit("连续过渡开关已改动")
             self.clear()
-        self.log.emit(f"已开启连续过渡：{_BLEND_NOTE}" if on else "已恢复逐段到达（blending 关闭）")
+        self.log.emit(f"已开启连续过渡：{_BLEND_TELL}" if on
+                      else "已恢复逐段到达：每段走到位停顿后，再走下一段")

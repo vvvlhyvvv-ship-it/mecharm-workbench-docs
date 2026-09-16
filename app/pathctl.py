@@ -30,6 +30,9 @@ from core.kinematics.transform import axis_swap_frame, to_column_major
 from core.path import PathSummary, Segment, gen_path, summarize, tool_pose_in_model
 
 _TICK_MS = 16                     # 播放时钟约 60Hz（软件刷新率，非机台参数；见模块 docstring）
+# 同一件事分两种说法（02 §2 步骤③ 禁术语上屏、§4 全中文）：`_FRAME_TELL` 给操作员看，
+# ⛔ 不带内部编号；`_FRAME_NOTE` 只进日志，保留可追溯的契约出处。
+_FRAME_TELL = "机台坐标系对齐方式尚未配置：本次按「模型与设备同向重合」处理，配置补齐后结果自动跟随"
 _FRAME_NOTE = ("模型框→设备框无配置源（契约 §7.1 待确认）：本次按同向重合框处理，"
                "回执到后只改配置、不改代码")
 
@@ -105,7 +108,7 @@ class PathController(QObject):
             return False
         if not self._frame_warned:
             self._frame_warned = True
-            self._say(_FRAME_NOTE)
+            self._say(_FRAME_TELL)
             log.warning("%s", _FRAME_NOTE)
         return True
 
@@ -137,7 +140,7 @@ class PathController(QObject):
         self._panel.step3.set_playing(True)
         self._panel.step2.setEnabled(False)
         self._timer.start(_TICK_MS)
-        self._say(f"开始播放：{len(self._segments)} 段按段线性插值（不外推、不预测下一帧）")
+        self._say(f"开始播放：{summarize(self._segments).describe()}")
 
     def pause(self) -> None:
         """暂停（离开步骤③／改点／切模式都会走到这里）：解除点位编辑锁。"""
