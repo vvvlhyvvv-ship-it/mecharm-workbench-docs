@@ -19,8 +19,10 @@ from PySide6.QtWidgets import (
 
 from app.stepbar import STEP_LABELS
 from app.steps.step1_import import Step1Pane
+from app.steps.step2_pick import Step2Pane
 
-# 步骤②-⑤的将来业务单号与该步主按钮文案（占位、禁用）；步骤①已是真业务页 Step1Pane。
+# 步骤②-⑤的将来业务单号与该步主按钮文案；步骤①已是 Step1Pane、步骤②已是 Step2Pane（T06），
+# 故本表仅 ③-⑤（T07/T08/T10）仍走占位页；首项 T06 保留作「步骤②已落地为何业务」的对照。
 _STEP_META: tuple[tuple[str, str], ...] = (
     ("T06", "命名当前点"),
     ("T07", "生成路径"),
@@ -37,8 +39,10 @@ class Panel(QWidget):
         self.setObjectName("RightPane")
         self._stack = QStackedWidget()
         self.step1 = Step1Pane()
+        self.step2 = Step2Pane()
         self._stack.addWidget(self.step1)
-        for label, (txx, btn_text) in zip(STEP_LABELS[1:], _STEP_META):
+        self._stack.addWidget(self.step2)
+        for label, (txx, btn_text) in zip(STEP_LABELS[2:], _STEP_META[1:]):
             self._stack.addWidget(self._make_page(label, txx, btn_text))
         layout = QVBoxLayout(self)
         layout.setContentsMargins(12, 8, 12, 8)
