@@ -14,8 +14,9 @@
 | `_probe_collision.mjs` | 页面内注入 | 由上者调用 | 读 three 私有场景图（包 `Object3D.prototype.add`／`lookAt`，只观察）⛔ 非交付件 |
 | `_probe_inject.py` | 仓外沙箱 | `injection_probe_log.txt` | 注入探针：改坏判据后 pytest 必须 rc=1 且失败项＝推理目标集 |
 
-粒度实测（取证脚本，均 ≤300 行／单函数 ≤50 行）：`_drive_viewport.py` 209｜`_rig.py` 188｜
-`_drive_send.py` 154｜`_drive_step4.py` 148｜`_probe_collision.mjs` 91｜`_probe_inject.py` 108。
+粒度实测（取证脚本，收单前按 `wc -l`／`ast` 复测，均 ≤300 行／单函数 ≤50 行）：`_drive_viewport.py`
+209｜`_rig.py` 189｜`_drive_send.py` 154｜`_drive_step4.py` 147｜`_probe_inject.py` 106｜
+`_probe_collision.mjs` 91；最长函数 33 行（`_probe_inject.py::main`）。
 
 ## 四处取证局限（如实登记，不以截图冒充）
 
@@ -159,8 +160,18 @@ MakeBox 抛**原始错**（非人话）。生产不可达（machine.yaml 只读�
 - 交付件物理行：`core/collision.py` 300｜`tests/test_collision.py` 299｜`app/checkctl.py` 249｜
   `app/steps/step4_check.py` 188｜`app/shell.py` 300｜`app/pathctl.py` 255｜`app/panel.py` 92｜
   `view/js/collision.js` 244（均 ≤300）
+- 单函数长度（`ast` 量法，硬指标 ≤50）：最长 `app/shell.py::__init__` **36** 行、
+  `core/collision.py::check` **35** 行；其余 `step4_check._build` 26｜`panel._make_page` 25｜
+  `checkctl.send_path` 24｜`pathctl.generate` 16｜`test_collision` 最长 16（均 ≤50）
 - ⚠️ `core/collision.py` 与 `app/shell.py` **双双顶到 300 行上限**：后续任何追加都会破限 ⇒ 报备项请裁
   （collision 若需加配置校验守卫，须先拆件并由指挥方追认文件名）。
+- 04 §5.5 三条复查命令实测（提交后终态复跑，**均输出为空＝合规**）：附4 粒度官方口径
+  （`git ls-files -co --exclude-standard … | grep -vE '^(view/vendor/|tests/fixtures/)' | xargs -r wc -l
+  | awk '$1>300 && $2!="total"'`）→ 空（唯一 >300 的 `view/vendor/three.module.js` 53044 行在白名单内）；
+  附5 `diff --name-only main...task/T08 | grep -E '^(前端任务包/|CR-|参考资料/)'` → 空；
+  附6-① `diff --name-only main...task/T08 -- view/vendor/` → 空（未新增 vendor 文件）。
+- 推送冻结令下 `task/T08` **无远端跟踪**（`git for-each-ref` 实测 `upstream=` 空）⇒ ⛔ 全程未 push；
+  主仓 `D:\ZCode项目\多功能机械臂软件` 工作树 ⛔ 未被本会话触碰（复跑 `git status --short` 为空）。
 
 ## L. 报备项（全文见收单汇报，此处摘要）
 
