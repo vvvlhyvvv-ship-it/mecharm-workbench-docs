@@ -3,11 +3,13 @@
 骨架：顶栏(56px) │ 左装配树(280px,可折叠) ┃ 中 WebEngine 视口 ┃ 右上下文栏(360px,可折叠) │ 底状态栏(32px)。
 T02 阶段内核未接入，全部用占位数据；本模块只做布局 + 外壳级接线：
   步骤条点击 → 右栏切页 + 设当前步 + 日志
-  工作模式生效 → 解锁步骤②-⑤；切换 → 广播“结果作废” + 日志（G16）
+  工作模式生效 → 解锁步骤②③（④⑤另需路径已生成且无不可达段）；切换 → 广播“结果作废” + 日志（G16）
   桥 echo：视口就绪后发 ping，收到 pong 写日志（证明双向通路）
   视口加载失败 → 日志（错误卡在 viewpane 内显示）
   T06：pick.face → core 换算真实点/真法向 → 步骤②点位列表；列表变化 → pick.enable 推标号牌；
        进/退步骤② 切拾取态（半透明＋十字光标）；F3 → 结果作废（清空点位＋视口标号牌）
+  T07：步骤③路径生成与播放动画的业务在 app/pathctl.py（本模块只构造它、接 changed 信号重算
+       ④⑤门禁、并在换臂/F3/新模型三处先行作废路径）——本文件已近 300 行上限，业务不得内联
 颜色/字号一律走 app.theme 全局 QSS，本模块不写内联样式。
 """
 
@@ -33,6 +35,7 @@ from app.assemblytree import AssemblyTree
 from app.bridge import Bridge
 from app.mode import ModeBadge, OnlineLight, WorkModeSelector
 from app.panel import Panel
+from app.pathctl import PathController
 from app.statusbar import StatusBar
 from app.stepbar import STEP_LABELS, StepBar
 from app.theme import apply_theme
@@ -69,6 +72,7 @@ class MainWindow(QMainWindow):
         self.viewpane.view().setAcceptDrops(False)  # 让拖放冒泡到主窗（WebEngine 默认吞 drop）
         self.panel = Panel()
         self.statusbar = StatusBar()
+        self.pathctl = PathController(self.panel, self.bridge, self.stepbar, self.statusbar, self)
 
         central = QWidget()
         col = QVBoxLayout(central)
@@ -152,6 +156,7 @@ class MainWindow(QMainWindow):
         self.panel.step2.waypoints_changed.connect(self._on_waypoints_changed)
         self.panel.step2.log.connect(self.statusbar.log)
         self.panel.step2.set_mode(None)        # 初始未选定工作模式 → 步骤②锁定
+        self.pathctl.changed.connect(self._refresh_unlock)   # 路径生成/作废 → 重算④⑤门禁
         f3 = QShortcut(QKeySequence("F3"), self)
         f3.activated.connect(self._on_invalidate_results)
         self.tree.selected.connect(self._on_tree_selected)
@@ -168,10 +173,12 @@ class MainWindow(QMainWindow):
         self._mode_ok = True
         self.panel.step2.set_mode(name)        # 顶部第一行常显当前工作模式、解锁列表（G16）
         self._refresh_unlock()
-        tail = "，步骤②-⑤已解锁" if self._brep_ok else "（待导入实体模型后解锁步骤②-⑤）"
+        tail = ("，步骤②③已解锁（④⑤待路径生成后解锁）" if self._brep_ok
+                else "（待导入实体模型后解锁步骤②③）")
         self.statusbar.log(f"工作模式：{name}{tail}")
 
     def _on_mode_switched(self, name: str) -> None:
+        self.pathctl.invalidate("已切换工作模式")  # 先按换臂原因作废路径，再清点（点位变化亦触发作废）
         self.panel.step2.clear()               # 换臂结果作废：先真清空点位（连带视口标号牌）
         self.bridge.call_view("invalidate", {"mode": name})
         self.statusbar.log("结果作废：已清空当前点位与路径，换臂后须重新示教与校核")
@@ -215,6 +222,7 @@ class MainWindow(QMainWindow):
 
     def _on_invalidate_results(self) -> None:
         """F3「结果作废」：真清空点位列表（连带视口标号牌），保留拾取态以便立即重新示教。"""
+        self.pathctl.invalidate("已按 F3 作废结果")
         self.panel.step2.clear()
         self.statusbar.log("结果作废：已清空当前点位（含视口标号牌），可重新示教")
 
@@ -226,16 +234,20 @@ class MainWindow(QMainWindow):
         self.bridge.ping(1)
 
     def _refresh_unlock(self) -> None:
-        # 步骤②-⑤需“已选工作模式 且 已导入实体模型”同时成立（面片模型不可编程）
-        ok = self._mode_ok and self._brep_ok
-        for n in (2, 3, 4, 5):
-            self.stepbar.set_step_enabled(n, ok)
+        # 步骤②③需“已选工作模式 且 已导入实体模型”同时成立（面片模型不可编程）
+        base = self._mode_ok and self._brep_ok
+        for n in (2, 3):
+            self.stepbar.set_step_enabled(n, base)
+        # 步骤④⑤另需路径已生成且无不可达段（完成标准②：越界→无法进入④）
+        for n in (4, 5):
+            self.stepbar.set_step_enabled(n, base and self.pathctl.ready())
 
     def _on_imported(self, res: object) -> None:
         asm = res["asm"]
         had_points = bool(self.panel.step2.waypoints())
         self._last = res
         self.bridge.call_view("mesh.load", {"reset": True, "parts": res["payload"]})
+        self.pathctl.invalidate("已导入新模型")
         self.panel.step2.clear()              # 新模型 → 原点位 source_face 失效，结果作废
         self.tree.populate(asm.tree_payload())
         self.stepbar.mark_completed(1)        # 红线④：步骤①导入成功即标记完成
