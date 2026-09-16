@@ -16,6 +16,7 @@
 
 from core.kinematics.fk import (PRISMATIC, REVOLUTE, Joint, KinematicModel, build_model, fk,
                                 raw_to_eng, resolve_positions)
+from core.kinematics.ik import Chain, IkError, derive_chain, ik, tool_link
 from core.kinematics.limits import Violation, check_limits
 from core.kinematics.transform import (AXES_XYZ, ZERO_POINT, CoordFrame, Point, Transform4x4,
                                        axis_swap_frame, device_to_model, device_to_scene,
@@ -27,6 +28,8 @@ __all__ = [
     # 03 §3 对外签名
     "fk", "check_limits", "raw_to_eng", "model_to_device", "device_to_model", "device_to_scene",
     "scene_to_device", "Violation", "Transform4x4",
+    # 解析逆解（T07；`ik` 亦属 03 §3 对外签名，其余三件是其链推导与异常面）
+    "ik", "IkError", "Chain", "derive_chain", "tool_link",
     # 链定义与位姿运算（T05／T07／T08 直接消费）
     "Joint", "KinematicModel", "build_model", "resolve_positions", "CoordFrame", "axis_swap_frame",
     "identity", "multiply", "translation", "rotation", "transform_point", "to_column_major",

@@ -20,7 +20,7 @@ ROOT = pathlib.Path(pkg.__file__).resolve().parent
 # 03 §3 签名表的 kinematics 行（fk／check_limits）＋表内出现的类型 ＋ T04 卡步骤 2/5 的三函数与换算
 PUBLIC = ("fk", "check_limits", "raw_to_eng", "Transform4x4", "Violation",
           "model_to_device", "device_to_model", "device_to_scene", "scene_to_device")
-SUBMODULES = ("__init__.py", "fk.py", "transform.py", "limits.py")
+SUBMODULES = ("__init__.py", "fk.py", "transform.py", "limits.py", "ik.py")
 
 
 def test_public_symbols_import_from_package_root():
