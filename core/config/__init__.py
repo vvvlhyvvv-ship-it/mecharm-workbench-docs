@@ -14,7 +14,7 @@
 
 from core.config.loader import load_machine
 from core.config.schema import (AXIS_KEYS, AXIS_ROLES, AXIS_TYPES, COUPLING_TYPES, LIMIT_KEYS,
-                                LINK_KEYS, MACHINE_KEYS, MODE_KEYS, OPCUA_KEYS,
+                                LINK_KEYS, MACHINE_KEYS, MODE_KEYS, MOTIONS, OPCUA_KEYS,
                                 PACK_PROFILE_AXIS_COUNT, PACK_PROFILES, READ_NODE_SPEC, REPO_ROOT,
                                 SECTIONS, TRAJECTORY_AXES_MAX, UNIT_BY_TYPE, WRITE_NODE_SPEC,
                                 ZERO_OFFSET_KEY, Axis, ConfigError, Coupling, Limits, Link,
@@ -24,7 +24,7 @@ __all__ = [
     "load_machine", "ConfigError", "MachineConfig", "Machine", "Axis", "Coupling", "Mode",
     "Link", "Limits", "OpcUa", "Paths",
     "REPO_ROOT", "SECTIONS", "AXIS_KEYS", "AXIS_TYPES", "AXIS_ROLES", "COUPLING_TYPES",
-    "MODE_KEYS", "LINK_KEYS", "LIMIT_KEYS", "MACHINE_KEYS", "OPCUA_KEYS", "PACK_PROFILES",
-    "PACK_PROFILE_AXIS_COUNT", "READ_NODE_SPEC", "WRITE_NODE_SPEC", "ZERO_OFFSET_KEY",
-    "UNIT_BY_TYPE", "TRAJECTORY_AXES_MAX",
+    "MOTIONS", "MODE_KEYS", "LINK_KEYS", "LIMIT_KEYS", "MACHINE_KEYS", "OPCUA_KEYS",
+    "PACK_PROFILES", "PACK_PROFILE_AXIS_COUNT", "READ_NODE_SPEC", "WRITE_NODE_SPEC",
+    "ZERO_OFFSET_KEY", "UNIT_BY_TYPE", "TRAJECTORY_AXES_MAX",
 ]

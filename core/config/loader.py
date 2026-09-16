@@ -12,8 +12,8 @@ from collections.abc import Mapping, Sequence
 
 import yaml
 
-from core.config.schema import (PACK_PROFILE_AXIS_COUNT, SECTIONS, Axis, ConfigError,
-                                MachineConfig, OpcUa)
+from core.config.schema import (MOTIONS, PACK_PROFILE_AXIS_COUNT, SECTIONS, Axis, ConfigError,
+                                Link, MachineConfig, OpcUa)
 from core.config.validate import (axes_section, limits_section, links_section, machine_section,
                                   modes_section, opcua_section, paths_section)
 
@@ -48,6 +48,30 @@ def _check_coupling_masters(problems: list[str], axes: Mapping[str, Axis]) -> No
         if coupling and coupling.type == "ratio" and coupling.master not in axes:
             problems.append(f"axes[{axis.id}].coupling.master: `{coupling.master}` "
                             f"不在 axes 表内")
+
+
+def _check_link_bindings(problems: list[str], links: Sequence[Link],
+                         axes: Mapping[str, Axis]) -> None:
+    """G18 驱动绑定三判：axis↔motion 同生同灭、axis 在 axes 表内、motion 在 MOTIONS 取值域内。
+
+    与 _check_coupling_masters 同理放 loader：axis 在册要等整张 axes 表建完，属跨节校验。三判写成
+    elif 短路链，是为**一处缺陷只出一条消息**——「共 N 项问题」的计数是现场判断要改几处的依据，
+    同一处报两条即虚高。缺 axis／motion 键的连杆已被 validate.links_section 拦在 links 之外
+    （键缺失消息只报一次），故此处 (None, None) 只可能是显式写 null＝该连杆无驱动轴，合法。
+    类型错（如 axis: 5）走「不在 axes 表内」这一条，不再另报类型，同为此故。
+    """
+    for link in links:
+        where = f"links[{link.id}]"
+        if (link.axis is None) != (link.motion is None):
+            problems.append(f"{where}: axis 与 motion 须同时有值或同时为 null（无驱动轴即无"
+                            f"运动方向），实得 axis={link.axis!r} motion={link.motion!r}")
+        elif link.axis is None:
+            continue                        # base／flange 一类无驱动轴连杆
+        elif link.axis not in axes:
+            problems.append(f"{where}.axis: 应为 axes 表内 id 或 null，实得 {link.axis!r}")
+        elif link.motion not in MOTIONS:
+            problems.append(f"{where}.motion: 取值应为 {'|'.join(MOTIONS)} 之一，实得 "
+                            f"{link.motion!r}")
 
 
 # pack_profile 一致性校验覆盖的两个 NodeId 数组键 → 其数组长度在契约里的出处。
@@ -104,6 +128,7 @@ def load_machine(path: str) -> MachineConfig:
     opcua = opcua_section(problems, data["opcua"])
     paths = paths_section(problems, data["paths"])
     _check_coupling_masters(problems, axes)
+    _check_link_bindings(problems, links, axes)
     _check_pack_profile(problems, opcua)
     if problems:
         raise ConfigError(_format(path, problems))

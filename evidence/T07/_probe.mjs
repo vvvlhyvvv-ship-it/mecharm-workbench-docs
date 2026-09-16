@@ -1,0 +1,81 @@
+// evidence/T07/_probe.mjs — 取证探针（⛔ 非交付件、⛔ 不放 view/，只由 _drive_shell_path.py 与
+// _diag_fps_throttle.py 动态注入）。
+//
+// 为什么需要它：loader.js 把 scene／renderer 留在模块私有变量，path.js 也一样 ⇒ 页面上下文里
+// 拿不到场景图，无法直接核对「视口画了什么」。本探针与 path.js 共用**同一个** three 模块实例
+// （相对路径解析到同一个 file: URL），故包裹 Object3D.prototype.add 就能看到 path.js 加进场景的
+// 每个显示对象：段折线的名字／颜色、箭头数量、工具标记的世界坐标。仅观察，原实现照旧 apply。
+import * as THREE from "../../view/vendor/three.module.js";
+
+const seen = [];
+const proto = THREE.Object3D.prototype;
+const origAdd = proto.add;
+proto.add = function (child) {
+  seen.push(child);
+  return origAdd.apply(this, arguments);
+};
+
+function round(value) {
+  return Math.round(value * 1e6) / 1e6;
+}
+
+// 取证脚手架：常驻**裸 rAF 心跳**（只计数、⛔ 不渲染、⛔ 不碰场景），按 500 ms 窗口算帧率。
+// 用途＝把「宿主把整页帧调度掐了」与「path.js 自己的循环停转」区分开：两者同低（实测同为 0.7fps）
+// ⇒ 节流在宿主侧，该轮 perf.fps 作废；心跳高而角标低 ⇒ 才是本单代码问题。节流的成因已用
+// `_diag_fps_throttle.py` 三段对照排除（单帧回调 p50 0.1ms／max 2.1ms、`view.grab()` 无关、
+// WebGL 走 ANGLE D3D11 硬件渲染、空页与真页面本底均 60fps），只余宿主 BeginFrame 调度这一项，
+// 且**间歇**发生（四旗标全开＋窗体活动时也会掉到 1~7fps）。⚠️ 心跳自己也在 rAF 上，故它只能作
+// 判别器、⛔ 不能用来解除节流（曾指望多一条 rAF 把合成器唤醒，实测无效）。
+let beats = 0, heartbeatFps = 0, beatSince = performance.now();
+function heartbeat(now) {
+  beats += 1;
+  if (now - beatSince >= 500) {
+    heartbeatFps = Math.round((beats * 1000) / Math.max(now - beatSince, 1) * 10) / 10;
+    beats = 0;
+    beatSince = now;
+  }
+  requestAnimationFrame(heartbeat);
+}
+requestAnimationFrame(heartbeat);
+
+function colorOf(obj) {
+  const mat = obj.material || (obj.line && obj.line.material) || null;
+  return mat && mat.color ? "0x" + mat.color.getHex().toString(16) : null;
+}
+
+function describe(obj) {
+  const world = obj.getWorldPosition(new THREE.Vector3());
+  return {
+    name: obj.name || "",
+    type: obj.type,
+    segId: obj.userData && obj.userData.segId !== undefined ? obj.userData.segId : null,
+    // pick.js 只把带 userData.id 的网格当拾取目标：本单的显示对象必须**不带**它
+    pickable: !!(obj.userData && obj.userData.id !== undefined),
+    color: colorOf(obj),
+    visible: obj.visible,
+    world: [round(world.x), round(world.y), round(world.z)],
+  };
+}
+
+function mine() {
+  // 只报**仍挂在场景图上**的对象：path.js 每次 path.show 都会 group.remove 旧段（parent 变 null），
+  // 若不过滤，历次重建的旧段会一起报出来，折线数看着翻倍（实测踩过）。
+  return seen.filter((o) => o.parent
+                           && (/^path-seg-/.test(o.name) || o.name === "tool-marker"
+                               || o.type === "ArrowHelper"));
+}
+
+window.__probe = {
+  dump() {
+    const items = mine();     // 活对象（仍在场景图上）
+    return {
+      added_total: seen.length,
+      heartbeat_fps: heartbeatFps,
+      lines: items.filter((o) => /^path-seg-/.test(o.name)).length,
+      arrows: items.filter((o) => o.type === "ArrowHelper").length,
+      markers: items.filter((o) => o.name === "tool-marker").length,
+      any_pickable: items.some((o) => o.pickable),
+      items: items.map(describe),
+    };
+  },
+};

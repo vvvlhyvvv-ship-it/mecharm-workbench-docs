@@ -1,0 +1,1 @@
+[OK] 无轴参数魔法数字；扫描 50 个文件（app、core、comm、view/ 下 .py/.js/.html/.css，view/vendor/ 白名单除外）

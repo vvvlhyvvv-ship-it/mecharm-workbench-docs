@@ -136,19 +136,29 @@ modes:
 #   占位 0.0 意味着 fk 各级只有轴位移、无连杆偏置——T04 用例①的「理论值」须按此口径手算。
 # ─────────────────────────────────────────────────────────────────────────────
 links:
-  - {id: base, length_mm: 0.0, parent: null}          # 设备基础／产线基准（契约 §7.1 原点待确认）
-  - {id: gantry, length_mm: 0.0, parent: base}         # 大车（X1）
-  - {id: frame, length_mm: 0.0, parent: gantry}        # 上部机架（Z1）
-  - {id: carriage, length_mm: 0.0, parent: frame}      # 平移架（Y1）
-  - {id: arm_lift, length_mm: 0.0, parent: carriage}   # 机械臂升降架（X2）
-  - {id: arm, length_mm: 0.0, parent: arm_lift}        # 机械臂（Z2）
-  - {id: tube3, length_mm: 0.0, parent: arm}           # 三级筒（X3）
-  - {id: flange, length_mm: 0.0, parent: tube3}        # 快接法兰：当前所挂多功能臂的挂载点
-  - {id: mount_a, length_mm: 0.0, parent: carriage}    # 打磨臂安装架（YA，停放／对位工位）
-  - {id: mount_b, length_mm: 0.0, parent: carriage}    # 氧化皮吸附臂安装架（YB）
-  - {id: mount_c, length_mm: 0.0, parent: carriage}    # 脱模剂喷涂臂安装架（YC）
-  - {id: mount_d, length_mm: 0.0, parent: carriage}    # 氧化皮破碎臂安装架（YD）
-  - {id: mount_e, length_mm: 0.0, parent: carriage}    # 玻璃垫放置臂安装架（YE）
+  # ── G18（04 §7.2；@user 2026-09-16 22:10 授权 T07 代 T03 扩此两键）──────────────
+  #   axis＝驱动该连杆的 axes[].id，null＝无驱动轴（base 是基准、flange 是挂载点）；
+  #   motion＝该轴的运动方向（设备坐标系右手系，契约第 7 章），**与 axis 同生同灭**。
+  #   意义：fk／ik 的链拓扑与运动方向从此表读，不在代码里写死（03 §4「界面零硬编码」同源纪律）。
+  #   ⚠️ 取值仍是**占位**（踏勘第 7 项回执未到，同 length_mm 现值 0.0）：当前按**轴代号字母**
+  #      对应填 x／y／z。反例即在本表内——X2 的名称是「机械臂升降架」（听着该是 Z 向），代号却是
+  #      X；ZA1／ZA2 亦名为打磨臂升降而代号 Z。故字母**不足以**定方向，回执到后只改本文件、
+  #      不改 fk.py／ik.py；在此之前不得据 motion 对外承诺任何可达性或姿态。
+  #   YA~YE 五个安装架填 y：底稿记其与 Y1 同向布置（踏勘第 6 项待回执）。
+  # ─────────────────────────────────────────────────────────────────────────────
+  - {id: base, length_mm: 0.0, parent: null, axis: null, motion: null}     # 设备基础／产线基准（契约 §7.1 原点待确认）
+  - {id: gantry, length_mm: 0.0, parent: base, axis: X1, motion: x}        # 大车（X1）
+  - {id: frame, length_mm: 0.0, parent: gantry, axis: Z1, motion: z}       # 上部机架（Z1）
+  - {id: carriage, length_mm: 0.0, parent: frame, axis: Y1, motion: y}     # 平移架（Y1）
+  - {id: arm_lift, length_mm: 0.0, parent: carriage, axis: X2, motion: x}  # 机械臂升降架（X2）
+  - {id: arm, length_mm: 0.0, parent: arm_lift, axis: Z2, motion: z}       # 机械臂（Z2）
+  - {id: tube3, length_mm: 0.0, parent: arm, axis: X3, motion: x}          # 三级筒（X3，驱动级倍速见 axes 注）
+  - {id: flange, length_mm: 0.0, parent: tube3, axis: null, motion: null}  # 快接法兰：当前所挂多功能臂的挂载点
+  - {id: mount_a, length_mm: 0.0, parent: carriage, axis: YA, motion: y}   # 打磨臂安装架（YA，停放／对位工位）
+  - {id: mount_b, length_mm: 0.0, parent: carriage, axis: YB, motion: y}   # 氧化皮吸附臂安装架（YB）
+  - {id: mount_c, length_mm: 0.0, parent: carriage, axis: YC, motion: y}   # 脱模剂喷涂臂安装架（YC）
+  - {id: mount_d, length_mm: 0.0, parent: carriage, axis: YD, motion: y}   # 氧化皮破碎臂安装架（YD）
+  - {id: mount_e, length_mm: 0.0, parent: carriage, axis: YE, motion: y}   # 玻璃垫放置臂安装架（YE）
 
 # ─────────────────────────────────────────────────────────────────────────────
 # limits —— 全局限值（禁在代码里散写字面量，一律走这里）

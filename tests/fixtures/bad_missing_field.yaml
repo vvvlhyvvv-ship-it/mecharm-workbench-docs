@@ -15,9 +15,11 @@ axes:
 modes:
   - {id: grind, name: 打磨, axes: [X1, RA]}
 
+# G18 两键：base 无驱动轴（axis／motion 双 null）；gantry 绑 X1（8 个样例里 X1 均无注入
+# 缺陷），故本样例的问题项数仍只有 zero_offset_mm／clearance_warn_mm 那两处缺字段。
 links:
-  - {id: base, length_mm: 0.0, parent: null}
-  - {id: gantry, length_mm: 100.0, parent: base}
+  - {id: base, length_mm: 0.0, parent: null, axis: null, motion: null}
+  - {id: gantry, length_mm: 100.0, parent: base, axis: X1, motion: x}
 
 # ↓ 缺 clearance_warn_mm
 limits: {speed_max_mm_s: 100.0, speed_rapid_mm_s: 80.0, speed_work_mm_s: 10.0,

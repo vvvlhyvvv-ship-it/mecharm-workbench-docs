@@ -188,14 +188,14 @@ def modes_section(problems: Problems, raw: object, axes: Mapping[str, Axis]) -> 
 
 
 def links_section(problems: Problems, raw: object) -> tuple[Link, ...]:
-    """连杆表；parent 必须指向表内 id 或 null（length_mm 单位 mm）。"""
+    """连杆表（length_mm 单位 mm）；parent／axis 为表内 id 或 null，motion 取 x|y|z 或 null（G18）。"""
     if not isinstance(raw, list) or not raw:
         problems.append(f"links: 应为非空数组，实得 {type(raw).__name__}")
         return ()
     out: list[Link] = []
     for index, item in enumerate(raw):
         where = f"links[{index}]"
-        if not _mapping(problems, where, item, ("parent",)):
+        if not _mapping(problems, where, item, ("parent", "axis", "motion")):
             continue
         link_id = _text(problems, where, "id", item.get("id"))
         length = _num(problems, where, "length_mm", item.get("length_mm"))
@@ -203,8 +203,8 @@ def links_section(problems: Problems, raw: object) -> tuple[Link, ...]:
         if parent is not None and not isinstance(parent, str):
             problems.append(f"{where}.parent: 应为 links 表内 id 或 null，实得 {parent!r}")
             parent = None
-        if link_id and length is not None:
-            out.append(Link(link_id, length, parent))
+        if link_id and length is not None and "axis" in item and "motion" in item:
+            out.append(Link(link_id, length, parent, item.get("axis"), item.get("motion")))
     known = {link.id for link in out}
     for link in out:
         if link.parent is not None and link.parent not in known:
