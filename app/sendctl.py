@@ -168,20 +168,25 @@ class SendController(QObject):
     def _on_done(self, ok: bool) -> None:
         """一次下发收尾。`linkctl` 在 finally 里发它 ⇒ 成败都到，忙态一定会解开。
 
-        失败时**不**在这里画失败段：`failed` 那条信号排在后面到，画两遍会把阶段号写错。
+        ⚠️ 失败时**不**清 `_stage`：`done(False)` 与 `failed` 是先后排队的两条信号（`linkctl._handshake`
+        先在 finally 里 emit done、异常再经 `submit` 的回调 emit failed），这里先清掉，随后到的 `_on_failed`
+        就画不出「走到第几段失败」的 ⛔ 图标（T10 取证实测到过：图标停在 ▶、看着像还在进行）。
+        留给 `_on_failed` 画完再清；万一它没来，下次 `send()` 开头也会把 `_stage` 重写成本次的阶段 1。
         """
         self._pane.set_busy(False)
+        if not ok:
+            return
         self._stage = 0
-        if ok:
-            self._pane.all_done(_DONE_TELL)
-            self._stepbar.mark_completed(_LAST)     # 红线④：走完即标完成（同 T07 标③、T08 标④）
-            self._say("下发完成：五段握手全部走完，模型已按实测回读停在终点")
+        self._pane.all_done(_DONE_TELL)
+        self._stepbar.mark_completed(_LAST)     # 红线④：走完即标完成（同 T07 标③、T08 标④）
+        self._say("下发完成：五段握手全部走完，模型已按实测回读停在终点")
 
     def _on_failed(self, text: str) -> None:
         """异常 → 红条＋原因码＋[查看日志]（卡片步骤④ 第二例）。文字由 `linkctl.tell()` 转好 ⛔ 本件不改写。"""
         log.warning("下发／联动异常：%s", text)
         if self._stage:                 # 没在下发途中的失败（连不上、停不下来）⛔ 不乱画五段进度
             self._pane.fail_stage(self._stage, text)
+            self._stage = 0             # 画完即清：下一次失败不该沿用上一次的阶段号
         self._pane.show_error(text)
         self._pane.set_busy(False)
         self._say(text)

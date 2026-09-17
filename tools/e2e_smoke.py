@@ -3,17 +3,22 @@
 跑法（仓根；退出码 0＝所选节全 PASS）：
     /d/Miniforge3/envs/mecharm/python.exe tools/e2e_smoke.py [--only A,G] [--no-save]
 输出落 ``evidence/T10/e2e_smoke.txt``（``--no-save`` 只上屏）。本件自置 ``QT_QPA_PLATFORM=offscreen``
-⇒ 不需显示器；只连 127.0.0.1 的本机模拟器（D-6 禁连真 PLC）。装置（起壳／驱动 UI／读数）在
-``tools/e2e_rig.py``，**本件只放判据**——拆件理由见那件 docstring（04 §4.5-①②③，同 T09 的
-``comm_selftest.py``＋``comm_selftest_kit.py``）。
+⇒ 不需显示器；只连 127.0.0.1 的本机模拟器（D-6 禁连真 PLC）。
 
-十三条判据分七节：**A** 发布周期守卫（G20-②：``publish_interval_ms ≤ 50`` ⇔ ≥20 Hz；静默改 60 时 pytest
+**三件分工**（拆件理由同一个：合起来实测 310 行 > 04 §4.5-① 的 300 行上限，去重复与抽函数都已做完，
+只剩拆文件一条路 §4.5-②③；手法同 T09 的 ``comm_selftest.py``＋``comm_selftest_kit.py``）：
+本件＝判据表＋入口＋卡片步骤⑦ 的 A–G 判据；``tools/e2e_rig.py``＝装置（起壳／驱动 UI／读数）；
+``tools/e2e_faults.py``＝卡片步骤④ 的 H1–H3 判据。⛔ 入口与退出码只在本件一处。
+
+十六条判据分八节：**A** 发布周期守卫（G20-②：``publish_interval_ms ≤ 50`` ⇔ ≥20 Hz；静默改 60 时 pytest
 仍全绿、只有本件会红 ⇒ 负控证据＝临时改 60 跑出 A 节 FAIL 再还原）；**B–E** 步骤①→④ 各步真做完；**F**
 下发块组装守卫（轴数 > 槽位数 ⇒ 人话拒绝并点名放不下的轴，⛔ 不静默截断）；**G1–G7** 连接／确认弹窗的
-请求值小字／握手五段／``pose.update`` 出前端／角标实测频率／帧计数／模式互斥。
+请求值小字／握手五段／``pose.update`` 出前端／角标实测频率／帧计数／模式互斥；**H1–H3** 卡片步骤④ 的
+异常三用例（越界丢帧／PLC 拒绝给红条＋原因码＋[查看日志]／运行中断线后灯灰＋模型停住不跳飞）。
 
-⚠️ **各节有先后依赖**（B 的模型是 E 的障碍源、D 的路径是 F／G 的下发内容）⇒ ``--only`` 只适合复跑单节看
-原文，单跑 G 会因缺前置而红，这不是缺陷。
+⚠️ **各节有先后依赖**（B 的模型是 E 的障碍源、D 的路径是 F／G 的下发内容、G 连上的链路是 H 的工况，
+且 H3 断线会停掉本机模拟器 ⇒ 三例的顺序固定为越界→拒绝→断线）⇒ ``--only`` 只适合复跑单节看原文，
+单跑 G 或 H 会因缺前置而红，这不是缺陷。
 """
 
 from __future__ import annotations
@@ -36,6 +41,7 @@ from app.sendseg import SendSegError, build_segments  # noqa: E402
 from comm.opcua_client import axis_slots_of  # noqa: E402
 from core.collision import mode_axes  # noqa: E402
 from tools.comm_selftest_kit import check, force_utf8_stdout, guarded, recording  # noqa: E402
+from tools.e2e_faults import section_h  # noqa: E402  卡片步骤④ 异常三用例的判据（拆件理由见那件 docstring）
 from tools.e2e_rig import CONFIG, STAGES, THREE_POINTS, Rig  # noqa: E402
 
 OUTPUT = pathlib.Path("evidence/T10/e2e_smoke.txt")
@@ -181,13 +187,15 @@ def _follow(rig: Rig, results: dict) -> None:
           "模式互斥成立：徽标[联动]、点位与步骤③已锁定（要改点须先[暂停跟随]）、步骤⑤已标完成")
 
 
-# (判据号, 标题, 入口函数)；G2–G7 无入口＝由 section_g 在同一条链路上顺路记进 results（⛔ 不重连）
+# (判据号, 标题, 入口函数)；G2–G7／H2–H3 无入口＝由 section_g／section_h 在同一条链路上顺路记进
+# results（⛔ 不重连：重连就等于换了工况，前一条的证据也就不作数了）
 PLAN: tuple[tuple[str, str, object], ...] = (
     ("A", "发布周期守卫", section_a), ("B", "步骤①导入", section_b), ("C", "步骤②3 点", section_c),
     ("D", "步骤③路径", section_d), ("E", "步骤④校核", section_e), ("F", "下发块组装守卫", section_f),
     ("G1", "连接", section_g), ("G2", "确认弹窗请求值", None), ("G3", "握手五段", None),
     ("G4", "pose.update 出前端", None), ("G5", "角标实测频率", None), ("G6", "帧计数", None),
     ("G7", "模式互斥", None),
+    ("H1", "越界丢帧", section_h), ("H2", "PLC 拒绝", None), ("H3", "断线冻结", None),
 )
 
 

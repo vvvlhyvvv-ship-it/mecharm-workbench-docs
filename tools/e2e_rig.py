@@ -32,8 +32,11 @@ from OCC.Core.gp import gp_Pnt
 from PySide6.QtCore import QEventLoop, QTimer
 from PySide6.QtWidgets import QApplication
 
+from app.sendseg import slot_axes
 from app.shell import MainWindow
 from app.theme import apply_theme
+from comm.opcua_client import axis_slots_of
+from comm.opcua_client.subscribe import Frame
 from core.config import load_machine
 from core.geometry.face_point import FacePoint
 from tests.cad_samples import write_step
@@ -46,6 +49,8 @@ BOX_AT = (208.0, -20.0, -20.0)   # X 下角 208 ⇒ 与 200 mm 终点留 8 mm < 
 READY_S = 40.0               # 连接／导入／握手的等待上限（本机模拟器首起要建地址空间）
 HZ_RE = re.compile(r"数据\s+([\d.]+)Hz")    # 从角标**原文**取实测频率
 STAGES = (1, 2, 3, 4, 5)     # 握手五段（契约 §9.1 九步的壳侧投影，对应表见 app/linkctl.py::STAGES）
+OVER_MARGIN = 50.0           # 越界注入的超出量（mm）：够大不会被容差吃掉，又仍是机床上可能出现的数量级
+OFFLINE_S = 12.0             # 断链后判离线的等待上限（T09 完成标准第 4 条要求 5 s 内，这里给两倍余量）
 
 
 class Rig:
@@ -56,6 +61,9 @@ class Rig:
         apply_theme(self.qapp)
         self.tmp = tempfile.TemporaryDirectory(prefix="t10_e2e_")
         self.win = MainWindow()
+        # ⚠ 必须真显示：H 节要判「红条与[查看日志] 操作员看得见」，而 `isVisible()` 会因祖先隐藏恒为
+        # False（离屏取证实测踩过）——不 show 就等于把那条判据写成一句空话。
+        self.win.show()
         self.sent: list[tuple[str, object]] = []
         real = self.win.bridge.call_view
         self.win.bridge.call_view = lambda t, p=None: (self.sent.append((t, p)), real(t, p))[1]
@@ -73,6 +81,14 @@ class Rig:
         return True
 
     # --- 驱动 --------------------------------------------------------------- #
+    def goto(self, n: int) -> None:
+        """切到第 n 步：发 `stepbar.step_clicked`，走 shell 的真导航槽（`_on_step_clicked`）。
+
+        ⚠️ QStackedWidget 里**非当前页的子控件同样不可见** ⇒ 要判⑤页的红条／[查看日志] `isVisible()`，
+        得先把⑤页真翻到前台，否则读到的 False 是「没翻到这一页」而不是「代码没把它显示出来」。
+        """
+        self.win.stepbar.step_clicked.emit(n)
+
     def pump(self, ms: float) -> None:
         """跑一段真事件循环（导入走 QThread、握手走 asyncio 线程，processEvents 不够）。"""
         loop = QEventLoop()
@@ -104,6 +120,33 @@ class Rig:
                 FacePoint(pos_mm=pos, normal=(0.0, 0.0, 1.0), source_face=index))
         return self.win.panel.step2.waypoints()
 
+    # --- 异常注入（卡片步骤④三用例）------------------------------------------- #
+    def over_frame(self) -> tuple[Frame, str, float]:
+        """造一帧**越界回读**：其余槽位一律 0（合法零位），只把首轴顶到行程上界之外。
+
+        返回 (帧, 越界轴号, 该轴要求的工程值)。⚠️ 注入点＝`linkctl.frames` 这条 **comm→壳的唯一边界**：
+        `comm/simulator.py` 是 T09 已验收件、对本单禁改，而它的故障种类只有 reject／timeout／disconnect，
+        没有「回读值越界」⇒ 无从在 PLC 侧造出这一例。边界以下走的仍是真链路
+        （`livectl._accept` → T04 的 `check_limits` → ⑤页计数行），⛔ 不直调 livectl 的私有方法。
+        """
+        mode = self.win.workmode.current_mode() or ""
+        axes = slot_axes(self.cfg, mode)
+        axis = axes[0]
+        value = self.cfg.axes[axis].travel[1] + OVER_MARGIN
+        slots = axis_slots_of(self.cfg.opcua.pack_profile)
+        pos = tuple([value] + [0.0] * (slots - 1))
+        frame = Frame(t=time.monotonic(), heartbeat=0, pos=pos, vel=(0.0,) * slots,
+                      status=0, ack=0, alarm_word=0, seq_id=0, cur_seg=0)
+        return frame, axis, value
+
+    def emit_frames(self, frames: list) -> None:
+        """把一批回读帧从 comm→壳的边界投进去（等价于循环线程里 `_rx_frames` 的那一次 emit）。"""
+        self.flow.link.frames.emit(frames)
+
+    def inject(self, kind: str) -> None:
+        """故障注入（reject／timeout／disconnect）：转调 `linkctl.inject_fault`，⛔ 不自己碰模拟器。"""
+        self.flow.link.inject_fault(kind)
+
     def close(self) -> None:
         self.flow.shutdown()          # 先停跟随再停链路、停 asyncio 线程（否则 QThread 被销毁时还在跑）
         self.win.close()
@@ -115,6 +158,15 @@ class Rig:
 
     def poses(self) -> list:
         return [payload for kind, payload in self.sent if kind == "pose.update"]
+
+    def last_pose(self) -> list | None:
+        """最后一帧上屏的 16 数矩阵。断链用例用它判「模型停住不跳飞」：断链后插值时钟**仍在出帧**
+        （`livectl._tick` 恒钳在最新一帧），故判据不是「没有新帧」而是「矩阵逐数不变」。"""
+        for payload in reversed(self.sent):
+            kind, data = payload
+            if kind == "pose.update" and data.get("poses"):
+                return next(iter(data["poses"].values()))
+        return None
 
     def hz(self) -> float | None:
         got = HZ_RE.search(self.win.statusbar._freq.text())
