@@ -1,0 +1,23 @@
+# T10 G20-② 负控证据：publish_interval_ms 守卫
+# 手法：把 config/machine.yaml 的 publish_interval_ms 由 50 临时改成 60（＝标称 16.7 Hz < 契约 §6.1 的 20 Hz），
+#       期望 A 节 FAIL、退出码 1；跑完立即按**字节**还原（⛔ 不用 sed——Git Bash 的 sed -i 会把整份 CRLF 改写成 LF，
+#       git diff 因为做了行尾归一化而看不出来，属静默改到禁改件，本次已踩到并已还原核对）。
+# 命令：PYTHONPATH=. python tools/e2e_smoke.py --only A --no-save
+
+T10 全链路冒烟 · python 3.11.16 · 2026-09-17 15:40:11
+配置文件 config\machine.yaml｜取证物 evidence\T10\e2e_smoke.txt｜只跑 A
+
+=== A 发布周期守卫（G20-②：publish_interval_ms ≤ 50 ms ⇔ ≥20 Hz）===
+  machine.yaml 的 publish_interval_ms = 60 ms ⇒ 标称 16.7 Hz
+  → [FAIL] 发布周期 60 ms > 上限 50 ms ⇒ 标称只有 16.7 Hz，低于契约 §6.1 的 20 Hz：回读节律不够、跟随会掉帧
+
+=== 结论 ===
+  A   发布周期守卫             FAIL
+  未跑到（前置节失败或被 --only 排除）：无
+共 1 条判据：0 PASS、1 FAIL、0 条未跑到
+结论：有判据未过，见上文原文
+
+退出码=1（期望 1）
+
+# 还原核对：SHA256(config/machine.yaml) = 8fe2d2912979ab0d72e000d1474db94d29dd4869a987988132060ec50c98dc24
+#             与主仓原件 8fe2d2912979ab0d72e000d1474db94d29dd4869a987988132060ec50c98dc24 一致；git status 该件为空 ⇒ 禁改件零改动。

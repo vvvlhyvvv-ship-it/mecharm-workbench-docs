@@ -1,8 +1,10 @@
 """app.checkctl —— 步骤④「碰撞校核」与步骤⑤「禁发双阻断」的控制器（T08；02 §2 步骤④⑤、03 §3/§5）。
 
-**为什么单列一个文件**：`app/shell.py` 已贴着 04 §4.5-① 的「单文件 ≤300 物理行」上限（T07 接线后
-297 行），校核编排／双阻断／视口报警条载荷塞进去必越线 ⇒ 本件承载业务、shell 只做三行接线（沿用 T07
-的 `app/pathctl.py` 先例）。本文件名**非** 04 预授权命名 ⇒ 已在 T08 交付汇报报备。
+**为什么单列一个文件**：`app/shell.py` 已贴着 04 §4.5-① 的「单文件 ≤300 物理行」上限（T08 接线后
+**正好 300 行＝零余量**，派单卡 T10 §4(a) 点名 ⛔ 不得再内联），校核编排／双阻断／视口报警条载荷塞进去
+必越线 ⇒ 本件承载业务、shell 只做三行接线（沿用 T07 的 `app/pathctl.py` 先例）。本文件名**非** 04
+预授权命名 ⇒ 已在 T08 交付汇报报备。T10 起下发侧的壳接线总成也装在**本件** `__init__` 里而不是 shell.py
+（同一条零余量理由），且下发本就是本件 `send_path()` 的下一棒 ⇒ 交棒处只发一个 `send_confirmed`。
 
 单向数据流（03 §3）：路径段真值只在 `core.path`（步骤③生成，经 `app/pathctl.py` 转交）、障碍几何只在
 `core.geometry`（步骤①导入的 B-Rep 真身）⇒ 本件只把两者装进 `CollisionScene` 交 `core.collision.check`
@@ -24,10 +26,12 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 
 from PySide6.QtCore import QObject, Signal
 from PySide6.QtWidgets import QMessageBox
 
+from app.sendctl import install_send_flow
 from app.steps.step4_check import Step4Pane
 from core.collision import (VERDICT_INTERFERE, VERDICT_WARN, CollisionError, CollisionResult,
                             CollisionScene, check, mode_axes, obstacles_from, path_fingerprint)
@@ -44,6 +48,7 @@ class CheckController(QObject):
     """步骤④校核＋步骤⑤禁发门禁。`changed()`＝下发可用性变了（shell 据此重算步骤⑤是否可达）。"""
 
     changed = Signal()
+    send_confirmed = Signal(object)    # 双阻断都过且操作员已确认 → 载荷＝复判后的结论（T10 的下发交棒）
 
     def __init__(self, panel, bridge, stepbar, statusbar, pathctl, workmode,
                  parent: QObject | None = None) -> None:
@@ -58,8 +63,14 @@ class CheckController(QObject):
         self._asm = None                       # 步骤①的导入结果（障碍几何来源；本层不复制几何）
         self._mesh_ids: dict[str, int] = {}    # 障碍名 → mesh_id（视口高亮用，⛔ 不存第二份真值）
         self._gate_on = False
+        # 确认弹窗里「请求值小字」的取数钩子：弹窗归本件（禁发第②条），下发数值归 `app/sendctl.py`
+        # ⇒ 由它在 `install_send_flow` 里装上。None 即弹窗不显示小字 ⛔ 本件不自己算一份。
+        self.request_note: Callable[[], str] | None = None
         self._wire()
         self._invalidate("尚未校核")
+        # T10 的壳侧接线总成装在**这里**而不是 shell.py：shell.py 正好 300 行＝04 §4.5-① 上限零余量
+        # （派单卡 §4(a) 点名 ⛔ 不得内联），而下发本就是本件 `send_path()` 的下一棒。理由详见 sendctl。
+        self.send_flow = install_send_flow(parent, self)
 
     def _wire(self) -> None:
         step4 = self._panel.step4
@@ -91,6 +102,7 @@ class CheckController(QObject):
         on = reason is None
         self._panel.send_btn.setEnabled(on)
         self._panel.send_note.setText("" if on else reason)
+        self._panel.step5.set_gate(on)   # T10：同一份可用性镜像给⑤页（它一处算完四个状态，免得互相盖）
         if on != self._gate_on:
             self._gate_on = on
             log.info("步骤⑤下发按钮%s：%s", "已解锁" if on else "已置灰",
@@ -179,9 +191,9 @@ class CheckController(QObject):
             log.info("下发已取消：操作员在确认弹窗点了[取消]")
             self._say("已取消下发")
             return False
-        log.info("下发请求已确认（结论 %s、%d 段、指纹 %s）：PLC 下发通道由 T10 接入",
+        log.info("下发请求已确认（结论 %s、%d 段、指纹 %s）：已交下发通道（app/sendctl.py）",
                  fresh.verdict, len(self._pathctl.segments()), fresh.path_hash)
-        self._say("下发请求已确认：本机尚未接入 PLC 下发通道（由后续单交付），本次只完成禁发复判")
+        self.send_confirmed.emit(fresh)     # T10：本件的职责到「确认可发」为止，写段与握手归下发编排
         return True
 
     def _refuse(self, reason: str) -> bool:
@@ -192,13 +204,16 @@ class CheckController(QObject):
         return False
 
     def _confirm_text(self, result: CollisionResult) -> str:
-        """确认弹窗正文（02 §2 步骤⑤）：路径摘要＋校核结论＋**G19 覆盖面标注复述**（卡片处置第 4 条）。"""
+        """确认弹窗正文（02 §2 步骤⑤）：路径摘要＋校核结论＋**G19 覆盖面标注复述**（卡片处置第 4 条）
+        ＋**请求值小字**（T10 卡片步骤①：把真要写进 PLC 的数摊开给操作员核，经 `request_note` 钩子取）。"""
         icon = "🟡" if result.verdict == VERDICT_WARN else "🟢"
         lines = [summarize(self._pathctl.segments()).describe(),
                  f"校核结论：{icon} {result.describe()}",
                  f"覆盖面：{result.coverage()}"]
         if result.verdict == VERDICT_WARN:
             lines.append("⚠ 预警：间距小于安全值——确认知悉后方可下发")
+        if self.request_note is not None:
+            lines += ["", "本次要写进 PLC 的请求值（请逐条核对）：", self.request_note()]
         return "\n".join(lines + ["", _SEND_NOTE])
 
     def _ask_operator(self, result: CollisionResult, text: str) -> bool:

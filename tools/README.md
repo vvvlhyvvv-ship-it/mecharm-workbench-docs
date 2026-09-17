@@ -8,8 +8,10 @@
 | `config_check.py` | T03 | 配置校验入口 |
 | `lint_no_magic.py` | T03 | 常驻复查①自动化：扫轴参数魔法数字，**其他单不得修改其判定规则** |
 | `comm_selftest.py` | T09 | 双进程自测取证：六节 A–F 分别对完成标准第 2／1＋3／1／步骤 5／4／5 条打印**实测数字**并当场判 PASS／FAIL，输出落 `evidence/T09/selftest.txt`。退出码 0＝所选节全 PASS。跑法 `python tools/comm_selftest.py [--only A,F] [--no-save]` |
-| `comm_selftest_kit.py` | T09 | 上一件的**通用双进程夹具**（子进程宿主／日志抓取／Tee 落盘／临时端口／PASS-FAIL 记账／最小二乘）。**不含任何判据数字**，故 T10 的 `e2e_smoke.py` 可直接复用；拆件理由见该件 docstring（04 §4.5-①②③） |
-| `e2e_smoke.py` | T10 | 全链路冒烟 |
+| `comm_selftest_kit.py` | T09 | 上一件的**通用双进程夹具**（子进程宿主／日志抓取／Tee 落盘／临时端口／PASS-FAIL 记账／最小二乘）。**不含任何判据数字**，故 T10 的 `e2e_smoke.py` 可直接复用（实测复用了 `recording`／`guarded`／`check`／`force_utf8_stdout` 四件）；拆件理由见该件 docstring（04 §4.5-①②③） |
+| `e2e_smoke.py` | T10 | 全链路冒烟：十六项判据分八节 A／B／C／D／E／F／G1–G7／H1–H3，各对派单卡步骤⑦（A–G）与步骤④（H）的一条打印**实测数字**并当场判 PASS／FAIL，输出落 `evidence/T10/e2e_smoke.txt`。退出码 0＝所选节全 PASS。跑法 `python tools/e2e_smoke.py [--only A,G] [--no-save]`（`--only G` 即选中 G1–G7，前缀匹配）。A 节＝G20-② 的 `publish_interval_ms<=50` 守卫（等价 ≥20 Hz，⛔不写死 Hz），负控证据见 `evidence/T10/e2e_smoke_negative.txt`。⚠ 各节有先后依赖（H 用 G 连上的同一条链路、⛔ 不重连），`--only` 只适合复跑单节看原文 |
+| `e2e_faults.py` | T10 | 上一件的 **H1–H3 判据**＝卡片步骤④ 异常三用例（越界丢帧／PLC 拒绝给红条＋原因码＋[查看日志]／运行中断线后灯灰＋模型停住不跳飞）。拆件理由同下：三件合起来 310 行超 04 §4.5-① 上限。⛔ 入口与退出码只在 `e2e_smoke.py` 一处 |
+| `e2e_rig.py` | T10 | 上两件的**装置半边**（起真壳／临时目录／导入自造基本体／摆三点／事件泵／等待谓词／异常注入／读角标与图标）。**不含任何判据数字**，拆件理由同 T09：合起来超 04 §4.5-① 的 300 行上限。⚠ 它刻意读若干界面私有属性（`win._last`／`statusbar._freq`／`step5._stages`／`stepbar._completed`）——判据要钉的是**操作员看得见的那份原文**，绕开界面去读内部状态就会假绿（04 §5.5 附7-③）。⛔ 只读，不写任何业务件 |
 
 新增脚本文件名**须先在该单派单卡内报备**（04 §4.5-②）。
 

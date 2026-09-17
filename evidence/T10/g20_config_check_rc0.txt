@@ -1,0 +1,30 @@
+[OK] config/machine.yaml 校验通过
+machine：多功能机械臂三维编程工作台  schema_ver=1.0
+轴数 22：轨迹级 17（X1、Z1、Y1、X2、Z2、X3、ZA1、ZA2、RA、ZB、FB1、FB2、ZC、FC、RC、ZD、KE）
+          工序级 5（YA、YB、YC、YD、YE）—— 软件只读，不进下发段
+  耦合 X1: sync group=gantry_travel sync_tol_mm=0.5
+  耦合 Z1: sync group=frame_lift sync_tol_mm=0.5
+  耦合 Z2: sync group=arm_lift sync_tol_mm=0.5
+  耦合 X3: ratio master=X3 ratio=2.0
+工作模式 modes：
+  grind（打磨）: 9 轴，其中轨迹级 9 → X1、Z1、Y1、X2、Z2、X3、ZA1、ZA2、RA
+  scale_suction（氧化皮吸附）: 9 轴，其中轨迹级 9 → X1、Z1、Y1、X2、Z2、X3、ZB、FB1、FB2
+  release_spray（脱模剂喷涂）: 9 轴，其中轨迹级 9 → X1、Z1、Y1、X2、Z2、X3、ZC、FC、RC
+  scale_crush（氧化皮破碎）: 7 轴，其中轨迹级 7 → X1、Z1、Y1、X2、Z2、X3、ZD
+  glass_pad（玻璃垫放置）: 7 轴，其中轨迹级 7 → X1、Z1、Y1、X2、Z2、X3、KE
+限值 limits：
+  speed_max_mm_s = 500.0
+  speed_rapid_mm_s = 300.0
+  speed_work_mm_s = 50.0
+  accel_max_mm_s2 = 1000.0
+  clearance_warn_mm = 20.0
+  collision_envelope_mm = 3.0
+  tessellate_deflection_mm = 0.5
+  path_sample_step_mm = 50.0
+OPC UA：opc.tcp://127.0.0.1:4840  策略=None  ns=3  pack_profile=v1_2_8axis
+  回读节点：axis_pos 8 个、axis_vel 8 个、status、heartbeat、ack、alarm_word、seq_id、cur_seg
+  下发节点：cmd、seq_id、seg_count、speed_override、seg_array
+  publish_interval_ms = 50.0
+连杆 links：13 节（base, gantry, frame, carriage, arm_lift, arm, tube3, flange, mount_a, mount_b, mount_c, mount_d, mount_e）
+缓存目录 paths.cache_dir = C:\Users\lihaoyuan\AppData\Local\mecharm\cache（仓外，校验通过）
+[WARN] 22 个轴标 pending: true（行程／零点／正方向待电气·机械回执，当前为占位值，不得据此对外承诺）：X1, Z1, Y1, X2, Z2, X3, YA, YB, YC, YD, YE, ZA1, ZA2, RA, ZB, FB1, FB2, ZC, FC, RC, ZD, KE

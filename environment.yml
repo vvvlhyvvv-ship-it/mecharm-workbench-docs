@@ -72,6 +72,7 @@ dependencies:
   - zstd=1.5.7=h534d264_7
   - pip:
       - aiosqlite==0.22.1
+      - altgraph==0.17.5          # T10 指挥方授权增补：打包工具链（仅构建期）
       - anyio==4.15.1
       - asyncua==2.0.1
       - cffi==2.1.1
@@ -79,9 +80,12 @@ dependencies:
       - cryptography==50.0.1
       - idna==3.19
       - iniconfig==2.3.0
+      - pefile==2024.8.26         # T10 指挥方授权增补：打包工具链（仅构建期）
       - pluggy==1.6.0
       - pycparser==3.0
       - pygments==2.21.0
+      - pyinstaller==6.22.3       # T10 指挥方授权增补：打包工具（仅构建期，运行时不依赖）
+      - pyinstaller-hooks-contrib==2026.7   # T10 指挥方授权增补：打包工具链（仅构建期）
       - pyopenssl==26.4.0
       - pyside6==6.11.2
       - pyside6-addons==6.11.2
@@ -89,6 +93,7 @@ dependencies:
       - pytest==9.1.1
       - python-dateutil==2.9.0.post0
       - pytz==2026.3.post1
+      - pywin32-ctypes==0.2.3     # T10 指挥方授权增补：打包工具链（仅构建期）
       - pyyaml==6.0.3
       - shiboken6==6.11.2
       - six==1.17.0
