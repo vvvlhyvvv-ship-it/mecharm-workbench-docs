@@ -24,9 +24,9 @@ import time
 
 from PySide6.QtCore import QObject, QTimer, Signal
 
-from core.config import REPO_ROOT, ConfigError, load_machine
+from core.config import REPO_ROOT, ConfigError, MachineConfig, load_machine
 from core.kinematics.ik import Chain, derive_chain
-from core.kinematics.transform import axis_swap_frame, to_column_major
+from core.kinematics.transform import CoordFrame, axis_swap_frame, to_column_major
 from core.path import PathSummary, Segment, gen_path, summarize, tool_pose_in_model
 
 _TICK_MS = 16                     # 播放时钟约 60Hz（软件刷新率，非机台参数；见模块 docstring）
@@ -77,6 +77,15 @@ class PathController(QObject):
         """已生成且无阻断段＝可进入步骤④⑤（shell 的 `_refresh_unlock` 读它）。"""
         summary = self._panel.step3.summary()
         return summary is not None and summary.ok
+
+    # --- 供 T08 步骤④取数（对 T07 归属文件的跨归属**追加**，已在 T08 汇报报备）------- #
+    def segments(self) -> list[Segment]:
+        """当前段序列：T08 校核的数据源（真值仍只在 core，本件只转交 ⛔ 不复制不加工）。"""
+        return self._segments
+
+    def kinematics(self) -> tuple[MachineConfig | None, Chain | None, CoordFrame]:
+        """(机台配置, 驱动链, 坐标框)：T08 复用**同一份**绑定 ⛔ 不再各自 load_machine。"""
+        return self._cfg, self._chain, self._frame
 
     # --- 生成 --------------------------------------------------------------- #
     def generate(self) -> None:

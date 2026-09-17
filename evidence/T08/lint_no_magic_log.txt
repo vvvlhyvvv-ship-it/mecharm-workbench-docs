@@ -1,0 +1,10 @@
+[OK] 无轴参数魔法数字；扫描 54 个文件（app、core、comm、view/ 下 .py/.js/.html/.css，view/vendor/ 白名单除外）
+   300 core/collision.py
+   299 tests/test_collision.py
+   249 app/checkctl.py
+   188 app/steps/step4_check.py
+   300 app/shell.py
+    92 app/panel.py
+   255 app/pathctl.py
+   244 view/js/collision.js
+  1927 total
