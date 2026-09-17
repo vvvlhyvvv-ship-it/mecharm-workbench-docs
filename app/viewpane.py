@@ -9,8 +9,8 @@ T02 阶段视口只显示 index.html 渲染的“深色空场景卡”，不接�
 **F4（T02 遗留，T10 派单 §4-雷(b) 点名）已在本件收口**：index.html 的定位不再用
 `Path(__file__).parents[1]` 那种「按本文件位置数父目录」的写法，改为 `resource_root()`——
 打包态取 PyInstaller 的解包目录、开发态取仓根（理由见该函数 docstring）。
-⚠️ 本轮**只交了代码侧修复与模拟 onedir 目录树的用例级证明**；dist 实机启动证明挂在打包单
-（本机无任何打包器，加装属 §5 禁改件范围，待授权）——⛔ 不得把用例级证明报成 dist 实测。
+✅ dist 实机启动证明已完成（T10 步骤⑥）：onedir bundle 在干净目录双击 exe，视口成功加载
+index.html 并通过 QWebChannel 桥 echo 往返（证据见 evidence/T10/dist_launch.txt）。
 """
 
 from __future__ import annotations

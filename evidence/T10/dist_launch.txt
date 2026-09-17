@@ -1,0 +1,76 @@
+T10 步骤⑥ — dist 包「未装 Python 的干净目录」实测启动留痕
+取证时间：2026-09-17 17:16–17:20（本机系统钟）
+取证人：implementer（波6 T10）
+
+== 0. 结论先行 ==
+onedir 包在「本机干净目录、PATH 剥到只剩 Windows 系统目录（无 Python／无 conda／无 Miniforge）」
+下双击 mecharm.exe：主窗口「机械臂三维示教工作台」正常起来，中部 WebEngine 视口成功加载
+`_internal/view/index.html`（F4 dist 侧证明成立），QWebChannel 桥 echo 往返成功
+（状态栏打印「桥 echo：收到 pong {'echo': {'seq': 1}}」）。
+截图：evidence/T10/dist_viewport_bridge.png（自造界面，无甲方数据）。
+
+== 1. 启动方式（§7 报数项⑧要求说明） ==
+包位置（干净副本，与仓内 dist/ 同构）：D:\t10_dist_clean\mecharm\
+启动命令（PowerShell，模拟「工控机没装 Python」）：
+
+    $env:PATH = 'C:\Windows\System32;C:\Windows'      # 剥掉一切 Python/conda 路径
+    Remove-Item Env:QTWEBENGINE_CHROMIUM_FLAGS -ErrorAction SilentlyContinue   # 不设任何外部 Chromium 旗标
+    Start-Process -FilePath 'D:\t10_dist_clean\mecharm\mecharm.exe' -WorkingDirectory 'D:\t10_dist_clean\mecharm'
+
+即：**直接双击／Start-Process 该 exe 即可**，无需任何环境变量、无需 Python、无需 conda。
+（`run.py` 在冻结态自己 `os.environ.setdefault("QTWEBENGINE_CHROMIUM_FLAGS", "--single-process")`，
+见下 §3；用户若自行设了该变量则以用户值优先，setdefault 不覆盖。）
+
+== 2. 多进程渲染崩溃的对照证据（为什么需要 §3 的旗标） ==
+同一份包、同一干净目录，**外部强设** QTWEBENGINE_CHROMIUM_FLAGS='--enable-logging=stderr --v=0'
+（该外部值使 run.py 的 setdefault 不生效 ⇒ 走默认多进程）时，stderr 抓到渲染子进程连死两次：
+
+    [26224:23316:0917/171601.114:...web_contents_delegate_qt.cpp:299] ProcessGone: 3 (-1073741511)
+    [26224:23316:0917/171601.224:...web_contents_delegate_qt.cpp:299] ProcessGone: 3 (-1073741511)
+
+-1073741511 = 0xC0000139 = STATUS_ENTRYPOINT_NOT_FOUND（渲染子进程加载某 dll 缺导出即死）。
+界面表现为视口错误卡「三维视口加载失败 / 无法加载视口页面：…\_internal\view\index.html」
+（文件其实存在，是渲染进程死了，不是缺文件）。
+排查过程（ICU／VC 运行时大小写重复／OpenGL 软件兜底 opengl32sw／sandbox／GPU 进程／
+RendererCodeIntegrity 逐一排除，均不能消除该崩溃）详见本单汇报正文；根因未定位到单一 dll，
+属本 conda-Qt 构建在 onedir 冻结态的固有行为。
+
+== 3. 交付口径：冻结态单进程 WebEngine ==
+`run.py`（唯一入口）在 `getattr(sys, "frozen", False)` 时 setdefault 追加 `--single-process`。
+开发态（python run.py）与 e2e 冒烟（不 frozen）不受影响，仍走默认多进程。
+该旗标下 stderr 仅余两条**无害**提示（V8 Proxy resolver 在单进程模式不可用，与功能无关）：
+
+    [25872:21808:0917/171707.968:...system_network_context_manager.cpp:325] Cannot use V8 Proxy resolver in single process mode.
+    [25872:21808:0917/171707.975:...system_network_context_manager.cpp:325] Cannot use V8 Proxy resolver in single process mode.
+
+ProcessGone 计数 = 0（`grep -c ProcessGone dist_stderr2.txt` → 0）。
+
+== 4. F4 dist 侧视口加载证明（雷(b) 收口证据） ==
+视口成功渲染 index.html 的「深色空场景卡」，卡上文字（截图与 UIA 树均可读）：
+
+    三维视口
+    把 STEP / IGES / STL 文件拖到这里
+    或点右栏【选择模型文件】
+    桥：echo 双向通路正常
+
+状态栏日志行（UIA 树 StatusBar.LogLine 原文）：
+
+    [17:17:08] 桥 echo：收到 pong {'echo': {'seq': 1}}
+
+⇒ index.html 从 `_internal/view/` 加载成功（`app/viewpane.py::resource_root()` 冻结态取
+`sys._MEIPASS` 生效），且 QWebChannel 桥双向通路在冻结包内实测可用。⛔ 非「用例级模拟」，
+是真·dist 实机。
+
+== 5. 包内关键资产核对（构建后 ls 实测） ==
+    _internal/view/index.html                      ✔（F4 资源落地）
+    _internal/config/…                             ✔（schema.REPO_ROOT=parents[2] 对齐）
+    _internal/PySide6/plugins/platforms/qwindows.dll  ✔（Qt 平台插件，手收）
+    _internal/PySide6/QtWebEngineProcess.exe       ✔
+    _internal/PySide6/opengl32sw.dll               ✔（软件 GL 兜底，conda 无 ANGLE）
+    _internal/PySide6/qt.conf                      ✔（helper 子进程用）
+    _internal/PySide6/ 下**无** msvcp140*/vcruntime140*  ✔（VC 运行时去重，只留主环境 14.51 那份）
+    _internal/msvcp140.dll … vcruntime140_1.dll    ✔（主环境副本保留）
+
+== 6. 甲方数据核查 ==
+截图 dist_viewport_bridge.png 为自造界面（装配树空、视口为占位卡），扫「通裕／GXTC／招标／
+甲方／稷山／核减」等词 → 无命中（画面内无任何甲方名称或工件尺寸）。本件纯文字日志， likewise 无甲方数据。

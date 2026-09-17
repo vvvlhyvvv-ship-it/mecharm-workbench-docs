@@ -31,6 +31,7 @@ git -c core.quotepath=false diff --name-only main...task/TXX -- evidence/
 | `evidence/T05/` | `viewport_framing_fix.md` | T05 | 文内自证：样件由 `tests/cad_samples.assembly_step` 现场生成（自造几何） |
 | `evidence/T09/` | `selftest.txt` | T09 | 扫「通裕／通裕重工／GXTC／GXTC-A1-26170051／招标／甲方／重工／tongyu」→ CLEAN |
 | `evidence/T08/` | `selftest_collision.md`、`_rig.py`、`_drive_step4.py`、`_drive_viewport.py`、`_drive_send.py`、`_probe_collision.mjs`、`_probe_inject.py`、`step4_drive_log.txt`、`viewport_log.txt`、`send_gate_log.txt`、`injection_probe_log.txt`、`pytest_regression_log.txt`、`lint_no_magic_log.txt`、`viewport_interfere.png`、`viewport_warn.png`、`viewport_pass.png`、`viewport_focus.png`、`viewport_invalidated.png` | T08 | 扫同上一行词表 → **CLEAN**：4 处命中全是「⛔ 非甲方」「⛔ 不含甲方数据」一类**否定自证句**，无甲方名称／工件尺寸。样件＝`BRepPrimAPI_MakeBox` 现场造的 **40 mm 立方**（`_rig.py::OB_SIZE`），STEP 一律落 `tempfile.TemporaryDirectory(prefix="t08_")`（日志里可见 `%TEMP%\t08_*\obstacle_N.step`），⛔ 未引用仓内任何甲方模型；5 张 PNG 均为该自造几何的界面／视口截图 |
+| `evidence/T10/` | `dist_launch.txt`、`dist_viewport_bridge.png`、`e2e_smoke.txt`、`e2e_smoke_negative.txt`、`f4_injection_probe_log.txt`、`g20_config_check_rc0.txt`、`project_save_load_log.txt`、`_drive_project.py` | T10 | 扫同上一行词表 → **CLEAN**：dist 截图为自造界面（装配树空＋视口占位卡＋桥 echo 状态栏），其余全为本机命令输出／自造几何留痕，无甲方名称／工件尺寸 |
 
 > ⚠️ 本表**替代**原末行占位句「本目录当前**仅有此占位 README，无任何取证物**（T01 完成标准之一）」——
 > 该句在 T01 交付时点为真，其后 T02／T05／T09 三单各交取证物后变成**事实过期**，于 2026-09-16 T09 收单回填轮作废。
