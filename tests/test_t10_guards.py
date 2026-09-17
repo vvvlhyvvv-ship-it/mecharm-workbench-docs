@@ -1,4 +1,4 @@
-"""tests/test_t10_guards.py —— T10 收口的配置守卫（G20）。
+"""tests/test_t10_guards.py —— T10 收口的配置守卫（G20）与打包资源定位守卫（F4）。
 
 ① **G20-①**：`tools/config_check.py` 的节点表摘要必须**按 SPEC 遍历生成**。原摘要写死 G17 前的
    「三读三写」，扩表后**静默漏列** 5 个读键（`axis_vel`／`ack`／`alarm_word`／`seq_id`／`cur_seg`）
@@ -6,17 +6,29 @@
    漏键＝现场看漏握手要用的键。本用例把摘要文本与 `core/config/schema.py` 的 `READ_NODE_SPEC`／
    `WRITE_NODE_SPEC` **逐键比对**：SPEC 再扩表而摘要没跟上，即在 pytest 内变红，⛔ 不再依赖人眼发现。
 ② **G20-②**：见 `test_publish_interval_ms_meets_min_data_hz`（常量与 `tools/e2e_smoke.py` 同源）。
+③ **雷(b)／F4**（T02 遗留）：`app/viewpane.py` 原用 `Path(__file__).resolve().parents[1]/"view"`
+   定位 index.html——PyInstaller onedir 下本模块被收进 PYZ 归档、`__file__` 成了归档内虚拟路径，
+   数父目录得到的位置与 `--add-data` 实际落地位置不再必然重合 ⇒ dist 起不来视口。现改为
+   `resource_root()`（打包态取 `sys._MEIPASS`、开发态取仓根）。
+   ⚠️ **本机没有任何打包器**（PyInstaller／Nuitka／cx_Freeze 全无；加装要动 `environment.yml`／
+   `requirements.lock.txt`，属 §5 禁改件，待授权）⇒ 下面三条用**模拟的 onedir 目录树**验定位逻辑，
+   是用例级证明，⛔ **不等于** dist 实机双击 exe 的启动证明（后者挂在打包单，本轮如实报挂起）。
 
 归属与边界：`tools/e2e_smoke.py` 唯一写者＝T10；`tools/config_check.py` 的**摘要打印逻辑**经
-§7.2-G20-① 授权由 T10 代 T03 改（⛔ 未动任何校验判定）。本文件**不改** `tests/test_config.py`
-——该件归 T03，G17／G18 两条例外都明写「24 条用例须全绿且**不得改断言**」，故守卫另立一件。
+§7.2-G20-① 授权由 T10 代 T03 改（⛔ 未动任何校验判定）；`app/viewpane.py` 的资源定位经派单
+§4-雷(b) 点名授权修改。本文件**不改** `tests/test_config.py`——该件归 T03，G17／G18 两条例外都
+明写「24 条用例须全绿且**不得改断言**」，故守卫另立一件。
 """
 
 from __future__ import annotations
 
+import pathlib
 import subprocess
 import sys
 
+import pytest
+
+from app import viewpane
 from core.config import REPO_ROOT, load_machine
 from core.config.schema import READ_NODE_SPEC, WRITE_NODE_SPEC
 
@@ -61,3 +73,56 @@ def test_config_check_summary_lists_every_spec_node_key() -> None:
         if is_list:
             count = len(load_machine(SAMPLE).opcua.write_nodes[key])
             assert f"{key} {count} 个" in write, f"下发摘要未按实配个数报 {key}：{write}"
+
+
+# --- 雷(b)／F4：onedir 打包下的资源定位 ------------------------------------------------------- #
+# 本机**没有任何打包器**（PyInstaller／Nuitka／cx_Freeze 全无，加装属 §5 禁改件范围、待授权）⇒ 下面
+# 三条用**模拟的 onedir 目录树**验定位逻辑本身。⚠️ 这是用例级证明，⛔ 不等于 dist 实机启动证明。
+def _fake_onedir(tmp_path: pathlib.Path, with_view: bool) -> pathlib.Path:
+    """造一个 PyInstaller onedir 的 `_internal` 目录（可选带 view/index.html）。"""
+    internal = tmp_path / "dist" / "mecharm" / "_internal"
+    internal.mkdir(parents=True)
+    if with_view:
+        (internal / "view").mkdir()
+        (internal / "view" / "index.html").write_text("<html></html>", encoding="utf-8")
+    return internal
+
+
+def test_frozen_resource_root_follows_meipass(tmp_path: pathlib.Path,
+                                              monkeypatch: pytest.MonkeyPatch) -> None:
+    """F4：打包态资源根＝`sys._MEIPASS`，⛔ 不再按 `__file__` 数父目录（原写法在 dist 里指空）。
+
+    ⚠️ 用例级证明（模拟 onedir 树），⛔ 不是 dist 实机启动证明——后者挂在打包单。
+    """
+    internal = _fake_onedir(tmp_path, with_view=True)
+    monkeypatch.setattr(sys, "_MEIPASS", str(internal), raising=False)
+    assert viewpane.resource_root() == internal
+    target = viewpane.index_html()
+    assert target == internal / "view" / "index.html"
+    assert target.exists(), "模拟包内明明有 index.html 却没定位到 ⇒ F4 未真修好"
+    assert REPO_ROOT not in target.parents, "打包态还指着开发仓 ⇒ dist 里必然找不到文件"
+
+
+def test_dev_resource_root_is_repo_root(monkeypatch: pytest.MonkeyPatch) -> None:
+    """开发态（没有 `_MEIPASS`）＝仓根，且仓内真实的 view/index.html 能定位到。"""
+    monkeypatch.delattr(sys, "_MEIPASS", raising=False)
+    assert viewpane.resource_root() == REPO_ROOT
+    target = viewpane.index_html()
+    assert target == REPO_ROOT / "view" / "index.html"
+    assert target.exists(), "连开发态都找不到 index.html ⇒ 定位逻辑本身坏了（不是打包问题）"
+
+
+def test_frozen_missing_view_does_not_fall_back_to_repo(tmp_path: pathlib.Path,
+                                                        monkeypatch: pytest.MonkeyPatch) -> None:
+    """F4 配套：打包态文件缺失时**照样返回打包态路径**，⛔ 不偷偷回落开发仓。
+
+    回落会把「包没打全」伪装成能跑，还会让错误卡印一个 dist 里不存在的开发路径，把打包缺陷指向
+    错误方向（04 §5.5 附7 那一族：看着绿、实则掏空）⇒ 本用例专门锁住「不回落」这条。
+    ⚠️ 用例级证明（模拟 onedir 树），⛔ 不是 dist 实机启动证明。
+    """
+    internal = _fake_onedir(tmp_path, with_view=False)
+    monkeypatch.setattr(sys, "_MEIPASS", str(internal), raising=False)
+    target = viewpane.index_html()
+    assert target == internal / "view" / "index.html"
+    assert not target.exists(), "模拟包里本就没有 view/，这条前提坏了后面断言就没意义"
+    assert REPO_ROOT not in target.parents, "回落到了开发态仓根 ⇒ 打包漏件会被掩盖"

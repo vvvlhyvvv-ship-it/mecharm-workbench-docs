@@ -1,0 +1,42 @@
+=== 雷(b)／F4 负控四步记录（04 §5.5 附7-②）===
+生成时刻：2026-09-17 13:13:16 +0800　分支：task/T10　HEAD：d5fc329
+目标：证明 tests/test_t10_guards.py 的 F4 三守卫**有牙**——把 resource_root() 退回旧写法（无视
+      sys._MEIPASS、按 __file__ 数父目录）后必须变红，且失败项就是目标守卫。
+
+--- 步0 基线（未注入）---
+....                                                                     [100%]
+4 passed in 0.40s
+pytest rc=0
+
+--- 步1 注入：resource_root() 退回 Path(__file__).resolve().parents[1] ---
+注入已写盘
+落盘核实（grep 必须命中注入标记、且 _MEIPASS 分支必须已消失）：
+41:    return Path(__file__).resolve().parents[1]      # F4 注入：退回旧写法（无视 _MEIPASS）
+  ✓ resource_root 里的 _MEIPASS 分支已不存在
+
+--- 步2 跑守卫（期望 failed / rc=1）---
+        """
+        internal = _fake_onedir(tmp_path, with_view=False)
+        monkeypatch.setattr(sys, "_MEIPASS", str(internal), raising=False)
+        target = viewpane.index_html()
+>       assert target == internal / "view" / "index.html"
+E       AssertionError: assert WindowsPath('D:/ZCode项目/多功能机械臂软件-wt/t10/view/index.html') == ((WindowsPath('C:/Users/lihaoyuan/AppData/Local/Temp/pytest-of-lihaoyuan/pytest-135/test_frozen_missing_view_does_0/dist/mecharm/_internal') / 'view') / 'index.html')
+
+tests\test_t10_guards.py:126: AssertionError
+=========================== short test summary info ===========================
+FAILED tests/test_t10_guards.py::test_frozen_resource_root_follows_meipass - ...
+FAILED tests/test_t10_guards.py::test_frozen_missing_view_does_not_fall_back_to_repo
+2 failed, 2 passed in 0.53s
+pytest rc=1　⚠️ 必须是 rc=1（断言失败）；rc=2 是收集错误，按附7-② 不算有效负控
+
+--- 步3 还原 ---
+  ✓ 注入标记已消失
+41:    override = getattr(sys, "_MEIPASS", None)
+工作树 diff 统计（应只剩 F4 正式修复的 43 insertions / 5 deletions）：
+ app/viewpane.py | 48 +++++++++++++++++++++++++++++++++++++++++++-----
+ 1 file changed, 43 insertions(+), 5 deletions(-)
+
+--- 步4 复跑（期望全绿 / rc=0）---
+....                                                                     [100%]
+4 passed in 0.45s
+pytest rc=0
