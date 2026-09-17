@@ -139,10 +139,23 @@ _QSS = Template(
     QLabel[online="true"] { color: $ok; font-weight: bold; }
     QLabel[online="false"] { color: $off_text; }
 
+    /* ---- 着色文字：动态属性 tone → 语义色（02 §4「颜色＋图标＋文字」三通道里的颜色通道） ----
+       ⚠️ 必须走 QSS 属性选择器、⛔ 不用 setPalette：全局 QSS 只要给了 color（连上面 `QWidget {}`
+       那条通配都算），Qt 就按样式表算调色板、**忽略**手工 setPalette 的那份——T10 已实测：
+       用调色板着色的标签渲染出来仍是 $text_dim／$text（见 T10 交付汇报的发现项）。 */
+    QLabel[tone="ok"] { color: $ok; font-weight: bold; }
+    QLabel[tone="warn"] { color: $warn; font-weight: bold; }
+    QLabel[tone="deny"] { color: $deny; font-weight: bold; }
+    QLabel[tone="accent"] { color: $accent; font-weight: bold; }
+    QLabel[tone="dim"] { color: $text_dim; }
+
     /* ---- 底部状态栏 ---- */
     #StatusBar { background-color: $bg_top; border-top: 1px solid $border; }
     #LogLine { color: $text; }
     #FreqBadge { color: $text_dim; }
+    /* 数据频率角标：实测低于标称一半即变黄（卡片步骤②；由 app/livectl.py 置 hz 属性）。
+       必须排在上面那条基础规则**之后**，免得层叠顺序让灰盖掉黄。 */
+    #FreqBadge[hz="low"] { color: $warn; font-weight: bold; }
     #VersionLabel { color: $text_dim; }
 
     /* ---- 折叠按钮 ---- */
