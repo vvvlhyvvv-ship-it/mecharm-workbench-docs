@@ -16,7 +16,9 @@
 
 ⚠️ **角标两个数的写入方**：`statusbar.set_freq(hz, fps)` 是**整体替换**（T02 件、只许追加接线）⇒ 画面 fps 由
 `app/pathctl.py` 写、数据 Hz 由本件写；两处都连 `Bridge.received` 而本件**后连**（`install_send_flow` 晚于 shell
-构造 pathctl）⇒ 同一次发射内写在后、两个数都留得住。这是 Qt「按连接顺序派发」的保证，`tests/test_t10_live.py` 钉住。
+构造 pathctl）⇒ 同一次发射内写在后、两个数都留得住。这是 Qt「按连接顺序派发」的保证，由
+`tools/e2e_smoke.py` 的 **G5 判据**钉住：角标原文里数据 Hz 与画面 fps 必须**同时**在场，
+少任一个就是接线顺序被改坏了（本件后连的那条前提没了）。
 """
 
 from __future__ import annotations

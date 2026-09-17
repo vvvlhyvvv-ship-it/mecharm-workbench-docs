@@ -48,6 +48,7 @@ BOX = (40.0, 40.0, 40.0)     # 自造障碍基本体（⛔ 非甲方工件尺寸
 BOX_AT = (208.0, -20.0, -20.0)   # X 下角 208 ⇒ 与 200 mm 终点留 8 mm < clearance_warn 20 ⇒ 🟡 预警
 READY_S = 40.0               # 连接／导入／握手的等待上限（本机模拟器首起要建地址空间）
 HZ_RE = re.compile(r"数据\s+([\d.]+)Hz")    # 从角标**原文**取实测频率
+FPS_RE = re.compile(r"画面\s+([\d.]+)fps")  # 同上，取视口报来的画面帧率（占位时是 "--"，故取不到即 None）
 STAGES = (1, 2, 3, 4, 5)     # 握手五段（契约 §9.1 九步的壳侧投影，对应表见 app/linkctl.py::STAGES）
 OVER_MARGIN = 50.0           # 越界注入的超出量（mm）：够大不会被容差吃掉，又仍是机床上可能出现的数量级
 OFFLINE_S = 12.0             # 断链后判离线的等待上限（T09 完成标准第 4 条要求 5 s 内，这里给两倍余量）
@@ -170,6 +171,10 @@ class Rig:
 
     def hz(self) -> float | None:
         got = HZ_RE.search(self.win.statusbar._freq.text())
+        return float(got.group(1)) if got else None
+
+    def fps(self) -> float | None:
+        got = FPS_RE.search(self.win.statusbar._freq.text())
         return float(got.group(1)) if got else None
 
     def nominal_hz(self) -> float:

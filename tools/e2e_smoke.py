@@ -169,12 +169,14 @@ def _follow(rig: Rig, results: dict) -> None:
     check(results, "G4", bool(matrices) and all(
         len(m) == 16 and all(isinstance(v, float) for v in m) for m in matrices),
         f"{len(poses)} 帧 pose.update 出前端，位姿一律 16 个浮点（to_column_major 之后的列主序）")
-    hz, nominal = rig.hz(), rig.nominal_hz()
-    print(f"  角标原文：{rig.win.statusbar._freq.text()}（标称 {nominal:.1f} Hz、"
-          f"变黄阈值 {nominal / HZ_DIVISOR:.1f} Hz）")
-    check(results, "G5", hz is not None and hz >= nominal / HZ_DIVISOR,
+    hz, nominal, badge_text = rig.hz(), rig.nominal_hz(), rig.win.statusbar._freq.text()
+    fps = rig.fps()
+    print(f"  角标原文：{badge_text}（标称 {nominal:.1f} Hz、变黄阈值 {nominal / HZ_DIVISOR:.1f} Hz）")
+    check(results, "G5", hz is not None and hz >= nominal / HZ_DIVISOR and fps is not None,
           f"实测数据频率 {'--' if hz is None else f'{hz:.1f}'} Hz ≥ 标称的一半 {nominal / HZ_DIVISOR:.1f} Hz"
-          f"（角标不变黄；阈值由 publish_interval_ms 算出 ⛔ 不写死 10）")
+          f"（角标不变黄；阈值由 publish_interval_ms 算出 ⛔ 不写死 10），且画面 fps 也同时在角标上"
+          f"（{'有' if fps else '没有'}）——`set_freq` 是整体替换、数据 Hz 与画面 fps 由两件分别写，"
+          f"两个数都留得住才证得出 livectl **后连** Bridge.received 那条接线顺序")
     got, dropped = rig.flow.live.stats()
     print(f"  已采用 {got} 帧、丢弃 {dropped} 帧；⑤页计数行：{rig.win.panel.step5._counts.text()}")
     check(results, "G6", got > 0 and dropped == 0,
