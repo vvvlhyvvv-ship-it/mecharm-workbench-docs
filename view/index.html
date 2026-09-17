@@ -23,11 +23,14 @@
        loader.js 必须在 bridge.js 之后：它包裹 bridge.js 注册的 window.__mecharm_dispatch。
        pick.js（T06）必须在 loader.js 之后：它再次包裹 __mecharm_dispatch、截走 pick.enable/invalidate，
        path.js（T07）又必须在 pick.js 之后：它再次包裹 __mecharm_dispatch、截走 path.show/pose.update，
-       故注册顺序为 bridge→loader→pick→path。 -->
+       collision.js（T08）再必须在 path.js 之后：它又包裹 __mecharm_dispatch、截走 collision.show/focus，
+       且其障碍侧高亮要复用内层（path→pick→loader）已实现的 hl.set ⇒ 必须叠在最外层，
+       故注册顺序为 bridge→loader→pick→path→collision。 -->
   <script src="qrc:///qtwebchannel/qwebchannel.js"></script>
   <script type="module" src="js/bridge.js"></script>
   <script type="module" src="js/loader.js"></script>
   <script type="module" src="js/pick.js"></script>
   <script type="module" src="js/path.js"></script>
+  <script type="module" src="js/collision.js"></script>
 </body>
 </html>
