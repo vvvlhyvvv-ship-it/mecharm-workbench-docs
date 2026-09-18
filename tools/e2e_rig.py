@@ -65,6 +65,10 @@ class Rig:
         # ⚠ 必须真显示：H 节要判「红条与[查看日志] 操作员看得见」，而 `isVisible()` 会因祖先隐藏恒为
         # False（离屏取证实测踩过）——不 show 就等于把那条判据写成一句空话。
         self.win.show()
+        # T12：启动序列改经载入/登录页——离屏没有 run.py 的收集器（config 等里程碑不在 Rig 跑），
+        # 故直接把 splash 置就绪态，再走与「进入系统」按钮/回车同一个槽（真页面切换，不绕过宿主）。
+        self.win.splash.set_ready_state(self.win.boot.is_all_done())
+        self.win.enter_system()
         self.sent: list[tuple[str, object]] = []
         real = self.win.bridge.call_view
         self.win.bridge.call_view = lambda t, p=None: (self.sent.append((t, p)), real(t, p))[1]

@@ -1,0 +1,34 @@
+# config/ui.yaml —— 界面文案与启动参数的单一来源（T12 建；01 蓝图 §1-8）
+# ⚠️ 身份类文案（品牌/公司/水印/招标编号/版本/登录预填）只允许存在于此文件，代码零字面量。
+# 凡入 evidence/ 的截图一律以取证档启动（--ui-profile evidence，裁决 7／蓝图 §1-9）。
+# 加键必须同步 core/config/ui_config.py 的键表（白名单校验，未登记键会被拒载报错）。
+schema_ver: ui/v1
+
+brand_name: RoboPath HMI
+brand_sub: 机械臂三维模型导入 · 可视化编程 · 碰撞预检测
+system_name: 多功能机械臂 · 智能控制系统
+company: 通裕重工股份有限公司
+company_en: TONGYU HEAVY INDUSTRY CO., LTD.
+bidder_note: 本系统仅限本次投标使用 · 山西方盛
+bid_no: GXTC-A1-26170051
+watermark: 山西方盛 · 仅此次投标使用
+version_text: v0.2 · 界面形态对齐版
+login_user_default: TY10086
+login_name_default: 张晓东
+
+splash_max_ms: 4000          # 载入页时长上限；初始化完成即提前进就绪态（蓝图 §3.1）
+motion_enabled: true         # 动效开关（蓝图 §1-11）：false＝装饰性动效停转，信息与功能完整
+process_step_budget: 200     # ProcessStep 预算上限（招标第 7 条 ≥200 工步；T17 读）
+stage_default: auto          # 舞台默认档 auto/std/wide（蓝图 §5 档位取值表）
+
+# 取证档覆盖节（裁决 7）：--ui-profile evidence 时覆盖上面同名键。
+# 占位文案一律中性（蓝图 V1.2 规范）：禁含真实方名称/编号/日期。
+evidence_profile:
+  company: 〔公司名占位〕
+  company_en: "[COMPANY PLACEHOLDER]"
+  bidder_note: 〔投标标识占位〕
+  watermark: 〔水印占位〕
+  bid_no: 〔招标编号占位〕
+  version_text: 〔版本占位〕
+  login_user_default: OP0000
+  login_name_default: 操作员
