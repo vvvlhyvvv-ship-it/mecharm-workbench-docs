@@ -10,8 +10,9 @@
 本件＝判据表＋入口＋卡片步骤⑦ 的 A–G 判据；``tools/e2e_rig.py``＝装置（起壳／驱动 UI／读数）；
 ``tools/e2e_faults.py``＝卡片步骤④ 的 H1–H3 判据。⛔ 入口与退出码只在本件一处。
 
-十六条判据分八节：**A** 发布周期守卫（G20-②：``publish_interval_ms ≤ 50`` ⇔ ≥20 Hz；静默改 60 时 pytest
-仍全绿、只有本件会红 ⇒ 负控证据＝临时改 60 跑出 A 节 FAIL 再还原）；**B–E** 步骤①→④ 各步真做完；**F**
+十九条判据分九节：**A** 发布周期守卫（G20-②：``publish_interval_ms ≤ 50`` ⇔ ≥20 Hz；静默改 60 时 pytest
+仍全绿、只有本件会红 ⇒ 负控证据＝临时改 60 跑出 A 节 FAIL 再还原）；**S** T12 启动序列（经登录页
+进主界面／舞台档位表 std·wide·1366／取证档身份剥离）；**B–E** 步骤①→④ 各步真做完；**F**
 下发块组装守卫（轴数 > 槽位数 ⇒ 人话拒绝并点名放不下的轴，⛔ 不静默截断）；**G1–G7** 连接／确认弹窗的
 请求值小字／握手五段／``pose.update`` 出前端／角标实测频率／帧计数／模式互斥；**H1–H3** 卡片步骤④ 的
 异常三用例（越界丢帧／PLC 拒绝给红条＋原因码＋[查看日志]／运行中断线后灯灰＋模型停住不跳飞）。
@@ -38,13 +39,17 @@ preload_windows_icu()
 
 from app.livectl import HZ_DIVISOR  # noqa: E402
 from app.sendseg import SendSegError, build_segments  # noqa: E402
+from app.splash import SplashPane  # noqa: E402
+from app.statusbar import StatusBar  # noqa: E402
 from comm.opcua_client import axis_slots_of  # noqa: E402
 from core.collision import mode_axes  # noqa: E402
+from core.config.ui_config import load_ui  # noqa: E402
 from tools.comm_selftest_kit import check, force_utf8_stdout, guarded, recording  # noqa: E402
 from tools.e2e_faults import section_h  # noqa: E402  卡片步骤④ 异常三用例的判据（拆件理由见那件 docstring）
 from tools.e2e_rig import CONFIG, STAGES, THREE_POINTS, Rig  # noqa: E402
 
 OUTPUT = pathlib.Path("evidence/T10/e2e_smoke.txt")
+UI_CONFIG = pathlib.Path("config/ui.yaml")   # T12 S 节：取证档判据读同一份真实交付物
 MAX_PUBLISH_MS = 50.0        # G20-② 守卫值：≤50 ms ⇔ ≥20 Hz（契约 §6.1 的回读节律）⛔ 不写死 Hz
 OVER_MODE = "打磨臂"          # 9 轴 > 8 槽位：只为证 F 节的人话拒绝，⛔ 不用它下发
 FOLLOW_S = 10.0              # 卡片步骤⑦ 的「跟随 10 s」
@@ -63,6 +68,48 @@ def section_a(rig: Rig, results: dict) -> None:
         return
     check(results, "A", False, f"发布周期 {interval:g} ms > 上限 {MAX_PUBLISH_MS:g} ms ⇒ 标称只有 "
                                f"{nominal:.1f} Hz，低于契约 §6.1 的 {floor:g} Hz：回读节律不够、跟随会掉帧")
+
+
+def section_s(rig: Rig, results: dict) -> None:
+    print("\n=== S T12 启动序列：经登录页进入＋舞台档位＋取证档 ===")
+    user, name = rig.win.splash.login_values()
+    print(f"  当前页={rig.win.stage_host.page()}；登录预填 工号={user}·姓名={name}；"
+          f"载入里程碑 {rig.win.boot.done_count()}/{rig.win.boot.total()}")
+    check(results, "S1", rig.win.stage_host.page() == "workbench" and user and name,
+          "经载入/登录页进入主界面（同窗原地切换、未另开窗）；预填来自 ui.yaml、可改")
+    _stage_table(rig, results)
+    _evidence_strip(results)
+
+
+def _stage_table(rig: Rig, results: dict) -> None:
+    wanted = ((1920, 1080, "std", 1.0), (2560, 1080, "wide", 1.56), (1366, 768, "std", 1.0))
+    verdicts = []
+    for w, h, kind, fs in wanted:
+        rig.win.resize(w, h)
+        rig.pump(120)
+        spec = rig.win.stage_host.spec()
+        ok = spec.key == kind and abs(spec.fs - fs) < 1e-6
+        verdicts.append(ok)
+        print(f"  窗口 {w}×{h} ⇒ {spec.key}（--fs={spec.fs:g}，左右栏 {spec.left_px}/{spec.right_px}）"
+              f"{'✓' if ok else '✗ 期望 ' + kind}")
+    rig.win.resize(1440, 860)               # 还原 Rig 默认窗口，后续节不因尺寸分心
+    rig.pump(120)
+    check(results, "S2", all(verdicts) and rig.win.minimumWidth() == 1366,
+          "档位取值表：std 1920×1080／wide 2560×1080（--fs=1.56）／1366×768 等比可显（最小尺寸在）")
+
+
+def _evidence_strip(results: dict) -> None:
+    base = load_ui(str(UI_CONFIG))
+    evid = load_ui(str(UI_CONFIG), profile="evidence")
+    splash = SplashPane(evid)
+    bar = StatusBar(evid)
+    texts = splash.identity_texts() + [bar._watermark.text(), bar._version.text()]
+    leaks = [v for v in (base.company, base.company_en, base.bid_no, base.bidder_note,
+                         base.watermark, base.version_text) if any(v in t for t in texts)]
+    print(f"  取证档画面身份串（前两串）：{texts[:2]}｜底栏：{texts[-2]}｜{texts[-1]}")
+    print(f"  与普通档身份值重合：{len(leaks)} 处" + ("" if not leaks else f" → {'、'.join(leaks)}"))
+    check(results, "S3", not leaks,
+          "取证档启动 ⇒ 画面无甲方中英文名／招标编号／乙方投标标识（水印与版本同被占位替换）")
 
 
 def section_b(rig: Rig, results: dict) -> None:
@@ -192,7 +239,9 @@ def _follow(rig: Rig, results: dict) -> None:
 # (判据号, 标题, 入口函数)；G2–G7／H2–H3 无入口＝由 section_g／section_h 在同一条链路上顺路记进
 # results（⛔ 不重连：重连就等于换了工况，前一条的证据也就不作数了）
 PLAN: tuple[tuple[str, str, object], ...] = (
-    ("A", "发布周期守卫", section_a), ("B", "步骤①导入", section_b), ("C", "步骤②3 点", section_c),
+    ("A", "发布周期守卫", section_a), ("S1", "登录进入主界面", section_s),
+    ("S2", "舞台档位表", None), ("S3", "取证档剥离", None),
+    ("B", "步骤①导入", section_b), ("C", "步骤②3 点", section_c),
     ("D", "步骤③路径", section_d), ("E", "步骤④校核", section_e), ("F", "下发块组装守卫", section_f),
     ("G1", "连接", section_g), ("G2", "确认弹窗请求值", None), ("G3", "握手五段", None),
     ("G4", "pose.update 出前端", None), ("G5", "角标实测频率", None), ("G6", "帧计数", None),

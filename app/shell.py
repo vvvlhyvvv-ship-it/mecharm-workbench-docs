@@ -1,69 +1,58 @@
-"""工作台主窗体（02 设计方案 §1 全局骨架的唯一装配处）。
+"""工作台主窗体（02 V2.0 §1 全局骨架的装配处；T12 改多页宿主）。
 
-骨架：顶栏(56px) │ 左装配树(280px,可折叠) ┃ 中 WebEngine 视口 ┃ 右上下文栏(360px,可折叠) │ 底状态栏(32px)。
-T02 阶段内核未接入，全部用占位数据；本模块只做布局 + 外壳级接线：
-  步骤条点击 → 右栏切页 + 设当前步 + 日志
-  工作模式生效 → 解锁步骤②③（④⑤另需路径已生成且无不可达段）；切换 → 广播“结果作废” + 日志（G16）
-  桥 echo：视口就绪后发 ping，收到 pong 写日志（证明双向通路）
-  视口加载失败 → 日志（错误卡在 viewpane 内显示）
-  T06：pick.face → core 换算真实点/真法向 → 步骤②点位列表；列表变化 → pick.enable 推标号牌；
-       进/退步骤② 切拾取态（半透明＋十字光标）；F3 → 结果作废（清空点位＋视口标号牌）
-  T07/T08：③④⑤的业务分别在 app/pathctl.py 与 app/checkctl.py（本模块只构造它们、接 changed 信号
-       重算门禁、并在换臂/F3/新模型三处先行作废路径）；⑤是否可达改由 checkctl.ready() 决定＝禁发双
-       阻断第①条，第②条在 send_path() 入口内——本文件已贴 300 行上限，业务一律不得内联
-颜色/字号一律走 app.theme 全局 QSS，本模块不写内联样式。
+启动序列：载入页→登录页→主界面，同一 MainWindow 内**原地切换、不另开窗**（裁决 9）——
+载入/登录＝app/splash.py 两态页（恒 1920×1080 逻辑构图）；主界面＝原三栏工作台（顶栏/
+左右栏内部结构归 T13，本单不动）。舞台＝app/stage.py（蓝图 §5 固定逻辑尺寸＋等比缩放，
+载入/登录不参与 wide 档）。启动里程碑只报真实发生的步骤（app/splash.BootMilestones）：
+ICU 计时由 run.py 回填、配置/点表/缓存在 main() 实测、「视口就绪」取 ViewPane.loadFinished。
+控制器构造、工作台装配与信号连接在 app/wiring.py（本件曾 300 行零余量，T12 瘦身后
+T13 接手续改）。颜色/字号一律走 app.theme 全局 QSS，本模块不写内联样式。
 """
 
 from __future__ import annotations
 
+import os
 import pathlib
 import sys
+import time
 
-from PySide6.QtWidgets import (
-    QApplication,
-    QHBoxLayout,
-    QLabel,
-    QMainWindow,
-    QPushButton,
-    QSplitter,
-    QVBoxLayout,
-    QWidget,
-)
-from PySide6.QtCore import Qt
-from PySide6.QtGui import QKeySequence, QShortcut
+from PySide6.QtCore import QTimer
+from PySide6.QtWidgets import QApplication, QMainWindow
 
-from app.assemblytree import AssemblyTree
 from app.bridge import Bridge
-from app.checkctl import CheckController
 from app.mode import ModeBadge, OnlineLight, WorkModeSelector
 from app.panel import Panel
-from app.pathctl import PathController
+from app.splash import BOOT_STEPS, BootMilestones, SplashPane
+from app.stage import MIN_H, MIN_W, StageHost
 from app.statusbar import StatusBar
 from app.stepbar import STEP_LABELS, StepBar
 from app.theme import apply_theme
 from app.viewpane import ViewPane
+from app.wiring import CENTER_MIN, build_controllers, build_workbench, connect_signals
+from core.config import REPO_ROOT, ConfigError, load_machine
+from core.config.ui_config import UiConfig, load_ui
 from core.geometry.face_point import face_point_from_tri
 from core.geometry.import_model import GeometryError
 
-TOP_HEIGHT = 56
-LEFT_WIDTH = 280
-RIGHT_WIDTH = 360
-CENTER_MIN = 320
+UI_PATH = REPO_ROOT / "config" / "ui.yaml"
 
 
 class MainWindow(QMainWindow):
-    """三栏外壳主窗体。"""
+    """多页宿主主窗体：载入→登录→主界面原地切换。"""
 
-    def __init__(self) -> None:
+    def __init__(self, ui: UiConfig | None = None, stage_forced: str = "",
+                 boot: BootMilestones | None = None) -> None:
         super().__init__()
+        self.ui = ui or load_ui(str(UI_PATH))
         self.setWindowTitle("机械臂三维示教工作台")
         self.resize(1440, 860)
-        self.setMinimumSize(LEFT_WIDTH + CENTER_MIN + RIGHT_WIDTH, 600)
+        self.setMinimumSize(MIN_W, MIN_H)    # 画面 12 口径：1366×768 等比可显
         self.setAcceptDrops(True)              # 拖放模型文件到窗口即导入（02 §2 步骤①）
         self._mode_ok = False                  # 已选定工作模式
         self._brep_ok = False                  # 已导入实体模型；面片模型保持 False → ②-⑤锁定
         self._last: object = None              # 最近导入结果（含 parts.face_index，留存供 T06）
         self._pick_on = False                  # 步骤②拾取态（pick.enable 的 on，进退步骤②时切换）
+        self.boot = boot or BootMilestones(BOOT_STEPS[1:])
 
         self.bridge = Bridge(self)
         self.stepbar = StepBar()
@@ -73,99 +62,63 @@ class MainWindow(QMainWindow):
         self.viewpane = ViewPane()
         self.viewpane.view().setAcceptDrops(False)  # 让拖放冒泡到主窗（WebEngine 默认吞 drop）
         self.panel = Panel()
-        self.statusbar = StatusBar()
-        self.pathctl = PathController(self.panel, self.bridge, self.stepbar, self.statusbar, self)
-        self.checkctl = CheckController(self.panel, self.bridge, self.stepbar, self.statusbar,
-                                        self.pathctl, self.workmode, self)
+        self.statusbar = StatusBar(self.ui)
+        build_controllers(self)
 
-        central = QWidget()
-        col = QVBoxLayout(central)
-        col.setContentsMargins(0, 0, 0, 0)
-        col.setSpacing(0)
-        col.addWidget(self._build_topbar())
-        col.addWidget(self._build_splitter(), 1)
-        col.addWidget(self.statusbar)
-        self.setCentralWidget(central)
+        self.stage_host = StageHost(forced=stage_forced, default=self.ui.stage_default)
+        self.setCentralWidget(self.stage_host)
+        self.splash = SplashPane(self.ui, self.boot)
+        self.stage_host.set_splash(self.splash)
+        self.stage_host.set_workbench(build_workbench(self))
+        self.stage_host.show_splash()
+        self._splash_guard = QTimer(self)     # splash_max_ms 上限：到点即绪（未完项如实标注）
+        self._splash_guard.setSingleShot(True)
+        self._splash_guard.timeout.connect(lambda: self.splash.set_ready_state(self.boot.is_all_done()))
+        self._splash_guard.start(self.ui.splash_max_ms)
 
         self.bridge.attach(self.viewpane.page())
-        self._wire()
+        connect_signals(self)
         self.viewpane.start()
+        self.boot.begin("viewport")
 
-    def _build_topbar(self) -> QWidget:
-        bar = QWidget()
-        bar.setObjectName("TopBar")
-        bar.setFixedHeight(TOP_HEIGHT)
-        row = QHBoxLayout(bar)
-        row.setContentsMargins(12, 0, 12, 0)
-        row.setSpacing(10)
-        self._left_btn = self._collapse_button("◀", self._toggle_left)
-        title = QLabel("机械臂工作台")
-        title.setObjectName("AppTitle")
-        row.addWidget(self._left_btn)
-        row.addWidget(title)
-        row.addWidget(self.stepbar, 1)
-        row.addWidget(QLabel("工作模式"))
-        row.addWidget(self.workmode)
-        row.addWidget(self.badge)
-        row.addWidget(self.light)
-        self._right_btn = self._collapse_button("▶", self._toggle_right)
-        row.addWidget(self._right_btn)
-        return bar
+    # --- 启动序列与舞台 -------------------------------------------------------- #
+    def enter_system(self, user: str = "", name: str = "") -> None:
+        """「进入系统」唯一入口（登录页按钮/回车与 e2e 走同一槽；T13 顶栏「退出」的对称面）。"""
+        if not user or not name:
+            user, name = self.splash.login_values()
+        self._splash_guard.stop()
+        self.stage_host.show_workbench()
+        self.statusbar.log(f"已进入系统：{name}（{user}）")
 
-    def _collapse_button(self, text: str, slot) -> QPushButton:
-        btn = QPushButton(text)
-        btn.setProperty("collapse", "true")
-        btn.setFixedWidth(28)
-        btn.clicked.connect(slot)
-        return btn
+    def return_to_login(self) -> None:
+        """回登录页（舞台回登录档＝16:9；T13 顶栏「退出」挂本槽——裁决 9 连带）。"""
+        self.stage_host.show_splash()
+        self.splash.set_ready_state(self.boot.is_all_done())
+        self.statusbar.log("已退回登录页")
 
-    def _build_left(self) -> QWidget:
-        pane = QWidget()
-        pane.setObjectName("LeftPane")
-        box = QVBoxLayout(pane)
-        box.setContentsMargins(12, 8, 12, 8)
-        box.setSpacing(8)
-        title = QLabel("装配树")
-        title.setObjectName("PaneTitle")
-        self.tree = AssemblyTree()
-        box.addWidget(title)
-        box.addWidget(self.tree, 1)
-        return pane
+    def _on_stage_changed(self, kind: str) -> None:
+        spec = self.stage_host.spec()
+        self.splitter.setSizes([spec.left_px, CENTER_MIN + 240, spec.right_px])
+        self._push_viewport_fs()
+        self.statusbar.log(f"舞台档位：{spec.label()}")
 
-    def _build_splitter(self) -> QWidget:
-        self.splitter = QSplitter(Qt.Orientation.Horizontal)
-        left = self._build_left()
-        left.setMinimumWidth(200)
-        self.panel.setMinimumWidth(280)
-        self.viewpane.setMinimumWidth(CENTER_MIN)
-        self.splitter.addWidget(left)
-        self.splitter.addWidget(self.viewpane)
-        self.splitter.addWidget(self.panel)
-        self.splitter.setCollapsible(1, False)
-        self.splitter.setSizes([LEFT_WIDTH, CENTER_MIN + 240, RIGHT_WIDTH])
-        self._left_pane = left
-        return self.splitter
+    def _push_viewport_fs(self) -> None:
+        """视口 HTML 的 ``--fs``（蓝图 §5 缩放第②层：WebEngine 不做位图缩放，经
+        app/bridge.py:54 同一条 runJavaScript 通道直写 CSS 变量——不是桥消息）。"""
+        fs = self.stage_host.spec().fs
+        self.viewpane.page().runJavaScript(
+            f"document.documentElement.style.setProperty('--fs','{fs:g}')")
 
-    def _wire(self) -> None:
-        self.stepbar.step_clicked.connect(self._on_step_clicked)
-        self.workmode.committed.connect(self._on_mode_committed)
-        self.workmode.switched.connect(self._on_mode_switched)
-        self.bridge.received.connect(self._on_bridge_msg)
-        self.viewpane.load_failed.connect(lambda r: self.statusbar.log(r.replace("\n", " ")))
-        self.viewpane.view().loadFinished.connect(self._on_view_load)
-        self.panel.step1.imported.connect(self._on_imported)
-        self.panel.step1.failed.connect(lambda msg: self.statusbar.log(f"导入未成功：{msg}"))
-        self.panel.step2.waypoints_changed.connect(self._on_waypoints_changed)
-        self.panel.step2.log.connect(self.statusbar.log)
-        self.panel.step2.set_mode(None)        # 初始未选定工作模式 → 步骤②锁定
-        self.pathctl.changed.connect(self._refresh_unlock)   # 路径生成/作废 → 重算④⑤门禁
-        self.checkctl.changed.connect(self._refresh_unlock)  # 校核结论/指纹变化 → 重算⑤门禁（T08）
-        f3 = QShortcut(QKeySequence("F3"), self)
-        f3.activated.connect(self._on_invalidate_results)
-        self.tree.selected.connect(self._on_tree_selected)
-        self.tree.focused.connect(self._on_tree_focused)
-        self.panel.set_step(1)
+    def _on_view_load(self, ok: bool) -> None:
+        if not ok:
+            return
+        self.bridge.set_ready(True)
+        self.statusbar.log("视口就绪，发送 ping")
+        self.bridge.ping(1)
+        self.boot.mark("viewport", "单视口")
+        self._push_viewport_fs()
 
+    # --- 既有外壳行为（T02–T10 已验收，语义不变） -------------------------------- #
     def _on_step_clicked(self, n: int) -> None:
         self.stepbar.set_current(n)
         self.panel.set_step(n)
@@ -228,13 +181,6 @@ class MainWindow(QMainWindow):
         self.panel.step2.clear()
         self.statusbar.log("结果作废：已清空当前点位（含视口标号牌），可重新示教")
 
-    def _on_view_load(self, ok: bool) -> None:
-        if not ok:
-            return
-        self.bridge.set_ready(True)
-        self.statusbar.log("视口就绪，发送 ping")
-        self.bridge.ping(1)
-
     def _refresh_unlock(self) -> None:
         # 步骤②③需“已选工作模式 且 已导入实体模型”同时成立（面片模型不可编程）
         base = self._mode_ok and self._brep_ok
@@ -287,12 +233,47 @@ class MainWindow(QMainWindow):
         self._right_btn.setText("▶" if vis else "◀")
 
 
-def main() -> int:
-    """启动外壳（须以 `python -m app.shell` 运行，确保 app 包先完成 ICU 预载）。"""
+def _startup_checks(boot: BootMilestones) -> bool:
+    """载入页里程碑的真实来源：配置加载／点表校验／缓存目录（蓝图 §3.1，⛔ 禁编造行）。"""
+    t0 = time.perf_counter()
+    try:
+        cfg = load_machine(str(REPO_ROOT / "config" / "machine.yaml"))
+    except ConfigError as exc:
+        print(f"参数校验不通过：\n{exc}", file=sys.stderr)
+        return False
+    boot.mark("config", f"{(time.perf_counter() - t0) * 1000:.0f} ms · {len(cfg.axes)} 轴")
+    boot.mark("nodes", f"读 {len(cfg.opcua.read_nodes)} 键 · 写 {len(cfg.opcua.write_nodes)} 键")
+    cache = pathlib.Path(cfg.paths.cache_dir)
+    try:
+        cache.mkdir(parents=True, exist_ok=True)
+        writable = os.access(cache, os.W_OK)
+    except OSError:
+        writable = False
+    boot.mark("cache", cache.name if writable else f"{cache.name}（不可写）")
+    return True
+
+
+def main(stage: str = "auto", ui_profile: str = "default", icu_ms: float | None = None) -> int:
+    """启动外壳（唯一 QApplication 装配处；--stage／--ui-profile 由 run.py 解析后下传）。
+
+    icu_ms＝run.py 在 QApplication 之前实测的入口引导耗时（回填给载入页日志；
+    `python -m app.shell` 路径没有该计时 ⇒ 载入日志按实际少一行如实展示）。
+    """
+    try:
+        ui = load_ui(str(UI_PATH), profile=ui_profile)
+    except ConfigError as exc:
+        print(f"界面配置校验不通过：\n{exc}", file=sys.stderr)
+        return 2
+    boot = BootMilestones(BOOT_STEPS if icu_ms is not None else BOOT_STEPS[1:])
     app = QApplication(sys.argv)
     apply_theme(app)
-    win = MainWindow()
+    win = MainWindow(ui=ui, stage_forced="" if stage == "auto" else stage, boot=boot)
+    if icu_ms is not None:
+        boot.mark("icu", f"{icu_ms:.0f} ms")
     win.show()
+    app.processEvents()
+    if not _startup_checks(boot):
+        return 2
     return app.exec()
 
 

@@ -1,9 +1,11 @@
-"""底部状态栏（02 设计方案 §1/§3：人话日志一行滚动 │ 数据频率角标 │ 版本）。
+"""底部状态栏（蓝图 §3.7：人话日志一行滚动 │ 数据频率角标 │ 投标水印 │ 版本）。
 
 只暴露：
   log(msg)            人话日志，单行滚动只显示最新一条（带 HH:MM:SS 前缀）
   set_freq(hz, fps)   频率角标（T02 阶段为占位，传 None 显示 “--”）
-高度固定 32px（02 §1 骨架）。颜色/字号走 app.theme 全局 QSS。
+水印与版本文案读 config/ui.yaml（T12：原 VERSION 硬编码含内部编号上屏，违蓝图 §1-5，
+已迁入 ui.yaml 的 version_text／watermark，代码零字面量）。高度固定 32px（蓝图 §2 表）。
+颜色/字号走 app.theme 全局 QSS。
 """
 
 from __future__ import annotations
@@ -12,14 +14,15 @@ from datetime import datetime
 
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QWidget
 
-VERSION = "v0.1 · 工作台外壳（T02）"
+from core.config.ui_config import UiConfig
+
 BAR_HEIGHT = 32
 
 
 class StatusBar(QWidget):
     """底部状态栏：日志一行 + 频率角标 + 版本号。"""
 
-    def __init__(self, parent: QWidget | None = None) -> None:
+    def __init__(self, ui: UiConfig, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setObjectName("StatusBar")
         self.setFixedHeight(BAR_HEIGHT)
@@ -27,13 +30,16 @@ class StatusBar(QWidget):
         self._log.setObjectName("LogLine")
         self._freq = QLabel()
         self._freq.setObjectName("FreqBadge")
-        self._version = QLabel(VERSION)
+        self._watermark = QLabel(ui.watermark)
+        self._watermark.setObjectName("VersionLabel")
+        self._version = QLabel(ui.version_text)
         self._version.setObjectName("VersionLabel")
         layout = QHBoxLayout(self)
         layout.setContentsMargins(12, 0, 12, 0)
         layout.setSpacing(16)
         layout.addWidget(self._log, 1)
         layout.addWidget(self._freq)
+        layout.addWidget(self._watermark)
         layout.addWidget(self._version)
         self.set_freq(None, None)
 
