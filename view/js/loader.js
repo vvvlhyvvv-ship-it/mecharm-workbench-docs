@@ -13,9 +13,9 @@
 
 import * as THREE from "../vendor/three.module.js";
 
-const BG = 0x16202a;            // 与 app.css --bg-deep 一致（02 §4 深色底，防白屏）
-const BASE = 0x8a97a3;          // 零件常态色：深色金属灰
-const SEM = { ok: 0x2f6feb, warn: 0xd9a520, deny: 0xb3261e };  // 02 §4 颜色语义
+const BG = 0xd9e2ea;            // 画布浅底（01 蓝图 §4-A canvas＝演示稿 --canvas，HTML:35；与 app.css --canvas 同值）
+const BASE = 0x8a97a3;          // 零件常态色：中性灰（浅底上的灰模观感，对齐演示稿预览图）
+const SEM = { ok: 0x35d0ff, warn: 0xf5b544, deny: 0xff4d4d };  // 01 蓝图 §4-A：ok＝选中高亮＝accent 青（shell hl.set "ok" 是选中语义），warn/deny 走语义色
 const VFOV_DEG = 45;            // 透视相机竖直视场角（单点定义，flyTo 取景与 init 共用）
 
 let renderer, scene, camera, host, emptyEl;

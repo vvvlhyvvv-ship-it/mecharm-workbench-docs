@@ -1,13 +1,21 @@
-/* view/css/app.css — 视口页样式（02 设计方案 §4 视觉硬指标）。
- * index.html 只放骨架，样式一律在此；深色底防白屏，正文 ≥14px。 */
+/* view/css/app.css — 视口页样式（01 对齐蓝图 V1.2 §4 令牌，T11 换版）。
+ * index.html 只放骨架，样式一律在此；令牌与 app/theme.py TOKENS 同值同步。
+ * --fs 是外壳档位推送的 CSS 变量入口（01 蓝图 §5：T12 经 runJavaScript 写入，
+ * 本文件默认 std 档 =1；wide 档 =1.56 由外壳覆盖，不在此实现）。 */
 
 :root {
-  --bg-deep: #16202a;
-  --bg-card: #22303d;
-  --border: #2c3d4d;
-  --text: #e6edf3;
-  --text-dim: #9fb0bd;
-  --accent: #2f6feb;
+  /* 01 蓝图 §4-A 颜色（括注＝演示稿 :root 变量名，HTML:12–16） */
+  --bg-deep: #101317;      /* --bg-0：视口页兜底底色（画布为浅色，仅画布未起时可见） */
+  --bg-card: #232a34;      /* --bg-3：空态卡等深色专属元素 */
+  --border: #2c3440;       /* --line */
+  --border-2: #3a4553;     /* --line-2 */
+  --text: #dfe6ef;         /* --txt */
+  --text-dim: #93a1b3;     /* --txt-2 */
+  --text-faint: #64748b;   /* --txt-3 */
+  --accent: #35d0ff;       /* --cyan：唯一强调色 */
+  --accent-deep: #0d7fa8;  /* --cyan-d */
+  --canvas: #d9e2ea;       /* --canvas：画布浅底（渲染值同步 view/js/loader.js 的 BG） */
+  --fs: 1;                 /* 档位倍率：std=1／wide=1.56（01 蓝图 §5） */
 }
 
 * { box-sizing: border-box; }
@@ -17,8 +25,8 @@ html, body {
   height: 100%;
   background-color: var(--bg-deep);
   color: var(--text);
-  font-family: "Microsoft YaHei", "Segoe UI", sans-serif;
-  font-size: 14px;
+  font-family: "Microsoft YaHei UI", "Microsoft YaHei", "Segoe UI";  /* --sans */
+  font-size: calc(13px * var(--fs));  /* 01 蓝图 §4-B：正文基准 13px */
 }
 
 #viewport {
@@ -36,17 +44,19 @@ html, body {
   display: block;
 }
 
+/* 空态卡＝浅底上的深色专属元素（01 蓝图 §3.5：演示稿同款处理），
+ * 圆角走 §4-C 模态／浮层档 8px。 */
 .card {
   background-color: var(--bg-card);
   border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 32px 40px;
+  border-radius: calc(8px * var(--fs));
+  padding: calc(32px * var(--fs)) calc(40px * var(--fs));
   text-align: center;
   max-width: 480px;
 }
 
 .card h1 {
-  font-size: 18px;
+  font-size: calc(18px * var(--fs));
   margin: 0 0 12px;
 }
 
