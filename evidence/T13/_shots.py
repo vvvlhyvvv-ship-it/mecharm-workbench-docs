@@ -1,0 +1,130 @@
+"""evidence/T13/_shots.py —— T13 完成标准截图取证（离屏禁用：用真实平台渲染，字体才不是空心框）。
+
+纪律：凡入 evidence/ 的一律取证档（``load_ui(profile="evidence")``，裁决 7／蓝图 §1-9）；
+画面里的模型为**现场自造 40 mm 立方**（tests.cad_samples，⛔ 非甲方工件）。截图清单对应卡片
+完成标准：顶栏七区／三页签（装配树·编程·路径仿真）／右栏常驻双面板／wide 与 1366 两档
+（Δ-3 单视口无工具行空条、Δ-10 折叠钮在场）。
+"""
+
+from __future__ import annotations
+
+import contextlib
+import hashlib
+import io
+import os
+import pathlib
+import sys
+import tempfile
+import time
+
+os.environ.setdefault("QT_QPA_PLATFORM", "windows")
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+
+from app.bootstrap import preload_windows_icu  # noqa: E402  须在任何 PySide6 之前（ICU 陷阱）
+
+preload_windows_icu()
+
+from OCC.Core.BRepPrimAPI import BRepPrimAPI_MakeBox  # noqa: E402
+from OCC.Core.gp import gp_Pnt  # noqa: E402
+from PySide6.QtCore import QEventLoop, QTimer  # noqa: E402
+from PySide6.QtWidgets import QApplication  # noqa: E402
+
+from app.shell import MainWindow  # noqa: E402
+from app.theme import apply_theme  # noqa: E402
+from core.config.ui_config import load_ui  # noqa: E402
+from tests.cad_samples import write_step  # noqa: E402
+
+OUT = pathlib.Path(__file__).resolve().parent
+UI_PATH = pathlib.Path(__file__).resolve().parents[2] / "config" / "ui.yaml"
+BOX_AT = (0.0, -20.0, -20.0)
+BOX = (40.0, 40.0, 40.0)         # 自造基本体（⛔ 非甲方工件尺寸）
+
+
+def pump(ms: float) -> None:
+    loop = QEventLoop()
+    QTimer.singleShot(int(ms), loop.quit)
+    loop.exec()
+
+
+def sha256(path: pathlib.Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def grab(widget, name: str) -> None:
+    target = OUT / name
+    widget.grab().save(str(target))
+    print(f"  {target.name}  {widget.width()}x{widget.height()}  sha256={sha256(target)[:16]}…")
+
+
+def set_size(win, w: int, h: int) -> None:
+    win.resize(w, h)
+    pump(300)
+    if (win.width(), win.height()) != (w, h):
+        win.resize(w, h)
+        pump(500)
+    print(f"  [尺寸] {w}×{h} ⇒ {win.width()}×{win.height()}（档位 {win.stage_host.kind()}）")
+
+
+def wait_viewport(win, seconds: float = 20.0) -> bool:
+    deadline = time.monotonic() + seconds
+    while time.monotonic() < deadline:
+        pump(200)
+        if win.boot.state("viewport") == "done":
+            return True
+    return False
+
+
+def import_box(win, tmp: str) -> None:
+    path = pathlib.Path(tmp) / "box.step"
+    with contextlib.redirect_stdout(io.StringIO()):
+        write_step(BRepPrimAPI_MakeBox(gp_Pnt(*BOX_AT), *BOX).Shape(), path)
+    win.panel.step1.start_import(str(path))
+    deadline = time.monotonic() + 40.0
+    while time.monotonic() < deadline:
+        pump(100)
+        if win._last is not None:
+            return
+    print("  !! 导入 40 s 未完成（如实：后续树/徽标为空态）")
+
+
+def main() -> int:
+    app = QApplication([])
+    apply_theme(app)
+    evidence = load_ui(str(UI_PATH), profile="evidence")
+    with tempfile.TemporaryDirectory(prefix="t13_shots_") as tmp:
+        win = MainWindow(ui=evidence)
+        win.show()
+        pump(60)                            # 先让 show 落位（WM 只在首显时钳尺寸，之后 resize 可超屏）
+        set_size(win, 1920, 1080)
+        win.enter_system()
+        pump(400)
+        if not wait_viewport(win):
+            print("  !! 视口 20 s 未就绪（截图中视口将保持加载前态——如实）")
+        pump(300)
+        import_box(win, tmp)
+        pump(600)
+        print("== 取证档：主界面三页签＋两区特写（std 1920×1080）==")
+        grab(win, "01_主界面_装配树页签_evidence_std_1920x1080.png")
+        win.tabshell.switch_to("prog")
+        pump(200)
+        grab(win, "02_主界面_编程页签_evidence_std_1920x1080.png")
+        win.tabshell.switch_to("sim")
+        pump(200)
+        grab(win, "03_主界面_路径仿真页签_evidence_std_1920x1080.png")
+        win.tabshell.switch_to("tree")
+        pump(200)
+        print("== 区域特写（对照演示稿画面 03 的顶栏七区与右栏双面板）==")
+        grab(win.topbar, "04_顶栏七区_evidence.png")
+        grab(win._right_pane, "05_右栏双面板_evidence.png")
+        print("== 档位：wide 2560×1080 与 1366×768（Δ-3 单视口；Δ-10 折叠钮在场）==")
+        set_size(win, 2560, 1080)
+        grab(win, "06_主界面_evidence_wide_2560x1080.png")
+        set_size(win, 1366, 768)
+        grab(win, "07_主界面_evidence_1366x768.png")
+        win.close()
+    pump(200)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
