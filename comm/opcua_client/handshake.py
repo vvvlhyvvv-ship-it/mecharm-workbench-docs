@@ -32,11 +32,12 @@ from asyncua.ua.uaerrors import UaError
 from comm.opcua_client.errors import (AckTimeout, CommError, LoadRejected, SeqMismatch,
                                       StartRejected)
 from comm.opcua_client.subscribe import (ACK_LOAD_NG, ACK_LOAD_OK, ACK_RESET_DONE, ACK_START_NG,
-                                         ACK_START_OK, ACK_STOP_DONE, ST_DONE, Frame,
+                                         ACK_START_OK, ACK_STOP_DONE, ST_DONE, ST_PAUSED, Frame,
                                          ReadbackBuffer)
-from comm.opcua_client.write import (CMD_LOAD, CMD_RESET, CMD_START, CMD_STOP, SEG_SLOTS,
-                                     SEQ_ID_MAX, SPEED_OVERRIDE_FULL, SPEED_OVERRIDE_MIN,
-                                     WRITE_NODE_TYPES, Segment, pack_segments)
+from comm.opcua_client.write import (CMD_LOAD, CMD_PAUSE, CMD_RESET, CMD_RESUME, CMD_START,
+                                     CMD_STOP, SEG_SLOTS, SEQ_ID_MAX, SPEED_OVERRIDE_FULL,
+                                     SPEED_OVERRIDE_MIN, WRITE_NODE_TYPES, Segment,
+                                     pack_segments)
 
 log = logging.getLogger(__name__)
 
@@ -161,6 +162,43 @@ class Handshake:
     async def reset(self) -> None:
         """§5.3 CMD_RESET：清报警、回待机 → 等 ACK_RESET_DONE（注入异常后复位重试用）。"""
         await self._pulse(CMD_RESET, ACK_RESET_DONE, 0, "复位", StartRejected)
+
+    async def _await_bits_cleared(self, key: str, mask: int, timeout: float, what: str) -> int:
+        """等回读键 ``key`` 的指定位**全部清零**；形状照抄 ``_await_bits``（清事件→查条件→再等），
+        只把判据换成 ``not (value & mask)``——那边的判据表达不了「等清零」（蓝图 §6.2 授权新增）。"""
+        deadline = time.monotonic() + timeout
+        while True:
+            self._notify.clear()
+            value = self._buffer.integer(key)
+            if not (value & mask):
+                return value
+            left = deadline - time.monotonic()
+            if left <= 0:
+                raise AckTimeout(f"等 {what} 超时 {timeout} s（§9.1 超时表）")
+            try:
+                await asyncio.wait_for(self._notify.wait(), left)
+            except asyncio.TimeoutError:
+                pass
+
+    async def pause(self) -> None:
+        """§5.3 CMD_PAUSE：置位 → 等 ``status`` 的 ST_PAUSED 出现 → 清命令位。
+
+        ⚠️ 暂停/继续**没有专属 ACK 位**（ACK 表只有 LOAD/START/STOP/RESET/HOME）⇒ 只能等 ``status``
+        字；超时走现成 ``AckTimeout``（§9.1 超时表口径，⛔ 不造新错误类型）。清零放 finally——
+        超时/被拒也照清（§9.3-② 脉冲语义，同 ``_pulse`` 铁律：留着置位会把 PLC 卡在非法态）。"""
+        try:
+            await self._write("cmd", CMD_PAUSE)
+            await self._await_bits("status", ST_PAUSED, ACK_TIMEOUT_S, "ST_PAUSED")
+        finally:
+            await self._write("cmd", 0)
+
+    async def resume(self) -> None:
+        """§5.3 CMD_RESUME：等 ``status`` 的 ST_PAUSED **清零**（铁律同 ``pause``）。"""
+        try:
+            await self._write("cmd", CMD_RESUME)
+            await self._await_bits_cleared("status", ST_PAUSED, ACK_TIMEOUT_S, "ST_PAUSED 清零")
+        finally:
+            await self._write("cmd", 0)
 
     async def run(self, path: Sequence[Segment], *, speed_override: float = SPEED_OVERRIDE_FULL,
                   done_timeout: float = DONE_TIMEOUT_S) -> Frame:

@@ -149,6 +149,27 @@ def summarize(segments: list[Segment]) -> PathSummary:
                        blocked_count=sum(1 for seg in segments if seg.blocked))
 
 
+# 段类型 → 段型（`_SEG_TYPE` 的反查；`estimate_duration` 按段型取 limits 速度键用）
+_KIND_OF = {seg_type: kind for kind, seg_type in _SEG_TYPE.items()}
+
+
+def estimate_duration(segments: list[Segment], limits) -> float:
+    """按段长与 ``machine.yaml`` ``limits`` 的**速度上限**估算总时长（秒）——T15 路径仿真页签 KPI
+    「预计时长（估算）」的数据源。
+
+    估算口径：**速度上限，非时间参数化**——DEC-11（固定步频 vs 时间参数化）未决前，动画步频与真实
+    节拍无关，时长只能按「段长 ÷ 该段型的限速」推（点位型 `speed_rapid_mm_s`／轮廓型
+    `speed_work_mm_s`，均经 `speed_max_mm_s` 上界钳制，与 ``gen_path`` 的 ``duration_s`` 同口径）。
+    上屏**恒带「估算」字样**（口径铁律 2），⛔ 禁标实测。阻断段照计入（与 ``summarize`` 一致）；
+    空序列返回 0.0。
+    """
+    total = 0.0
+    for seg in segments:
+        speed = min(getattr(limits, _SPEED_KEY[_KIND_OF[seg.type]]), limits.speed_max_mm_s)
+        total += seg.length_mm / speed if speed > 0.0 else 0.0
+    return total
+
+
 def frame_inverse(frame: CoordFrame) -> CoordFrame:
     """`CoordFrame` 的逆框（上层框→本框）：旋转取转置、原点取 −Rᵀ·origin。
 

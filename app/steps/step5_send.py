@@ -1,21 +1,20 @@
-"""app.steps.step5_send —— 右栏步骤⑤「下发 PLC」业务页（T10 卡片步骤①③④；02 §2 步骤⑤）。
+"""app.steps.step5_send —— 执行控制·下发业务页（T10 卡片步骤①③④；T15 执行控制组化，02 V2.0 §2.3）。
 
-单一职责＝**视图**：链路态、握手五段进度、异常红条、跟随控制、帧与越界计数。判定与真值一律在别处
-——门禁与禁发复判在 `app/checkctl.py`（T08 双阻断，本页照旧把主按钮与旁注以 `send_btn`／`send_note`
-两个属性名交回给它），握手在 `app/linkctl.py`，联动投影在 `app/livectl.py`，段适配在 `app/sendseg.py`。
-本页 ⛔ 不算几何、⛔ 不持机台参数、⛔ 不自造结论措辞（03 §3 单向数据流）；用户意图经信号回灌控制器。
+单一职责＝**视图**：链路态、握手五段进度、异常红条、跟随控制、帧与越界计数、四枚执行命令与倍率／执行
+偏好。判定与真值一律在别处——门禁在 `app/checkctl.py`（T08 双阻断，本页把主按钮与旁注以 `send_btn`／
+`send_note` 属性名交回给它），握手在 `app/linkctl.py`，联动在 `app/livectl.py`，段适配在
+`app/sendseg.py`。本页 ⛔ 不算几何、⛔ 不持机台参数、⛔ 不自造结论措辞；用户意图经信号回灌控制器。
 
 **替换掉 T02 的占位页**：`app/panel.py` 自己的 docstring 写明「真下发通道由 T10 接入时替换整页」⇒
-本页暴露同名属性，`panel.py` 只做一行改指，T08 的门禁代码零改动。
+本页暴露同名属性，`panel.py` 只做一行改指，T08 的门禁代码零改动。T15 起本页改排为路径仿真页签的
+「② 执行控制 · 下发」区（`app/sim_tab.py` 嵌入），确认弹窗＋五段进度＋红条语义一字不改地迁入。
 
 五段进度 ↔ 契约 §9.1 九步的对应表在 `app/linkctl.py::STAGES` 处（此处只投影，⛔ 不重复定义）。
-颜色 ⛔ 禁散写色值：一律取 `app.theme.TOKENS`，且**必须**用动态属性 `tone` 走 QSS 选择器——⛔ 不用
-`setPalette`（全局 QSS 一旦给了 color，调色板就被忽略，T10 已实测；理由写在 theme.py 的注释里）。
-状态一律「颜色＋图标＋文字」三通道（02 §4／招标 16(3)③）：图标 ○待／▶进行中／●完成／⛔失败。
-
-⚠️ **按钮可用性的权威在控制器**：`_refresh()` 只是把 (链路, 跟随, 在途, 门禁) 四个状态投影成可用性；
-真正拦住「重复下发」的是 `app/linkctl.py` 的在途锁（点了会给红条人话）。故 T08 的门禁若在本页忙态期间
-改了 `send_btn`，最坏只是按钮亮一小会儿、点了仍被拒 ⇒ ⛔ 不为此把 T08 的判定搬进视图。
+颜色 ⛔ 禁散写色值：一律取 `app.theme.TOKENS` 且必须用动态属性 `tone` 走 QSS 选择器——⛔ 不用
+`setPalette`（全局 QSS 一旦给了 color，调色板就被忽略，T10 已实测）。状态一律「颜色＋图标＋文字」
+三通道（02 §4／招标 16(3)③）：图标 ○待／▶进行中／●完成／⛔失败。
+⚠️ **按钮可用性的权威在控制器**：`_refresh()` 只是把 (链路, 跟随, 在途, 门禁, 暂停) 投影成可用性；
+真正拦住「重复下发」的是 `app/linkctl.py` 的在途锁 ⇒ ⛔ 不把 T08 的判定搬进视图。
 """
 
 from __future__ import annotations
@@ -23,11 +22,10 @@ from __future__ import annotations
 from collections import deque
 
 from PySide6.QtCore import Signal
-from PySide6.QtWidgets import (QDialog, QHBoxLayout, QLabel, QPlainTextEdit, QPushButton,
-                               QVBoxLayout, QWidget)
+from PySide6.QtWidgets import (QComboBox, QDialog, QHBoxLayout, QLabel, QPlainTextEdit,
+                               QPushButton, QVBoxLayout, QWidget)
 
 from app.linkctl import STAGES
-from app.stepbar import STEP_LABELS
 
 _IDLE, _RUN, _DONE, _FAIL = "idle", "run", "done", "fail"
 _ICON = {_IDLE: "○", _RUN: "▶", _DONE: "●", _FAIL: "⛔"}
@@ -36,22 +34,28 @@ _HISTORY_MAX = 300          # [查看日志] 留这么多条人话（够查一�
 _LINK_DOWN = "未连接：本机还没有 PLC 通道（下发与跟随都不可用）"
 _SOURCE_LIVE = "当前驱动源：[联动] PLC 实测回读——点位编辑与步骤③已锁定，要改点请先[暂停跟随]"
 _SOURCE_SIM = "当前驱动源：[仿真] 本机算出来的位姿（步骤③的播放动画同属此态）"
+_PAUSED_TELL = "⏸ 已暂停：PLC 置暂停态（软件只发脉冲命令，见到状态位即清命令字）——点[▶ 继续]恢复"
+_OVERRIDES = (25, 50, 75, 100)   # 倍率档（SpeedOverride 合法域内的常用档；真值取 currentData）
+_PREFERS = ("连续", "逐段")       # 执行偏好（Δ-1：⛔ 不叫手动/半自动/全自动，模式归 PLC）
 
 
 class Step5Pane(QWidget):
-    """右栏步骤⑤页。信号＝用户意图；状态一律由控制器灌入（本页只投影、不计算）。"""
+    """执行控制·下发页。信号＝用户意图；状态一律由控制器灌入（本页只投影、不计算）。"""
 
     connect_requested = Signal()
     disconnect_requested = Signal()
     follow_requested = Signal()
     unfollow_requested = Signal()
     halt_requested = Signal()
+    pause_requested = Signal()
+    resume_requested = Signal()
+    reset_requested = Signal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setObjectName("PlaceholderCard")
         self._history: deque[str] = deque(maxlen=_HISTORY_MAX)
-        self._up = self._following = self._busy = self._gate = False
+        self._up = self._following = self._busy = self._gate = self._paused = False
         self._build()
         self.reset()
         self._refresh()
@@ -61,14 +65,27 @@ class Step5Pane(QWidget):
         box = QVBoxLayout(self)
         box.setContentsMargins(16, 16, 16, 16)
         box.setSpacing(8)
-        title = QLabel(STEP_LABELS[4])
-        title.setObjectName("PlaceholderTitle")
         self._link = self._line("dim", _LINK_DOWN)
         self._conn = self._button("连接本机模拟器", self.connect_requested)
         self._disc = self._button("断开", self.disconnect_requested)
         link_row = QHBoxLayout()
         link_row.addWidget(self._conn, 1)
         link_row.addWidget(self._disc)
+        self._resume_btn = self._button("▶ 继续", self.resume_requested)
+        self._pause_btn = self._button("⏸ 暂停", self.pause_requested)
+        self._halt_btn = self._button("⏹ 停止", self.halt_requested)
+        self._reset_btn = self._button("⟲ 复位到起点", self.reset_requested)
+        self._override = QComboBox()
+        self._override.addItems([f"{value}%" for value in _OVERRIDES])
+        self._override.setCurrentIndex(len(_OVERRIDES) - 1)   # 默认 100%＝现下发口径，不悄悄改速度
+        self._prefer = QComboBox()
+        self._prefer.addItems(_PREFERS)
+        param_row = QHBoxLayout()
+        for text, widget in (("倍率", self._override), ("执行偏好", self._prefer)):
+            param_row.addWidget(QLabel(text))
+            param_row.addWidget(widget)
+        self._paused_line = self._line("warn")
+        self._paused_line.setVisible(False)
         self._stages = [self._line("dim") for _ in STAGES]
         self._stage_note = self._line("dim")
         self._err = self._line("deny")
@@ -79,15 +96,20 @@ class Step5Pane(QWidget):
         self._counts = self._line("dim")
         self._follow_btn = self._button("开始跟随", self.follow_requested)
         self._unfollow_btn = self._button("暂停跟随", self.unfollow_requested)
-        self._halt_btn = self._button("停止运动", self.halt_requested)
         move_row = QHBoxLayout()
-        for widget in (self._follow_btn, self._unfollow_btn, self._halt_btn):
+        for widget in (self._follow_btn, self._unfollow_btn):
             move_row.addWidget(widget)
         self.send_note = self._line("dim")           # T08 门禁写人话原因的那一行（属性名不可改）
-        self.send_btn = QPushButton("下发 PLC")       # T08 门禁置灰的那个主按钮（属性名不可改）
+        self.send_btn = QPushButton("⇩ 下发执行")     # T08 门禁置灰的那个主按钮（属性名不可改）
         self.send_btn.setProperty("role", "primary")
         self.send_btn.setEnabled(False)
-        box.addWidget(title)
+        cmd_row = QHBoxLayout()
+        for widget in (self.send_btn, self._resume_btn, self._pause_btn, self._halt_btn, self._reset_btn):
+            cmd_row.addWidget(widget)
+        box.addLayout(cmd_row)
+        box.addLayout(param_row)
+        box.addWidget(self._paused_line)
+        box.addWidget(self.send_note)
         box.addWidget(self._link)
         box.addLayout(link_row)
         box.addWidget(self._rule("握手进度（契约 §9.1）"))
@@ -101,8 +123,6 @@ class Step5Pane(QWidget):
         box.addLayout(move_row)
         box.addWidget(self._source)
         box.addWidget(self._counts)
-        box.addWidget(self.send_note)
-        box.addWidget(self.send_btn)
 
     @staticmethod
     def _rule(text: str) -> QLabel:
@@ -126,15 +146,15 @@ class Step5Pane(QWidget):
         return button
 
     def _repaint(self, label: QLabel, tone: str) -> None:
-        """换 tone 后必须 unpolish/polish，否则 QSS 不重算（theme.py 的铁律里写着这一步）。"""
+        """换 tone 后必须 unpolish/polish，否则 QSS 不重算（theme.py 的铁律）。"""
         label.setProperty("tone", tone)
         label.style().unpolish(label)
         label.style().polish(label)
 
     # --- 控制器灌入：链路 ---------------------------------------------------- #
     def set_up(self, on: bool, text: str = "") -> None:
-        """链路可用性（`text` 非空即顺手把链路行写成该人话）。着色：连上＝绿，没连＝灰——「未连接」是正常
-        待机态而不是错误（错误一律走红条 `show_error`），⛔ 不用红色，免得操作员一进⑤页就看见一条红。"""
+        """链路可用性（`text` 非空即顺手写链路行）。连上＝绿、没连＝灰：「未连接」是正常待机态
+        而不是错误（错误一律走红条），⛔ 不用红色。"""
         self._up = on
         if text:
             self.set_link(text, "ok" if on else "dim")
@@ -152,6 +172,7 @@ class Step5Pane(QWidget):
             self._paint_stage(index, _IDLE)
         self._stage_note.setText("")
         self.clear_error()
+        self._paused_line.setVisible(False)   # 上一轮的暂停提示一并清（按钮态由 _refresh 重算）
         self.set_counts(0, 0, "")
 
     def set_stage(self, stage: int, text: str = "") -> None:
@@ -210,8 +231,7 @@ class Step5Pane(QWidget):
         return tuple(self._history)
 
     def show_log(self) -> None:
-        """[查看日志]：只读全文弹窗。用 QPlainTextEdit 而非消息框的「详细」折叠区——折叠区在离屏取证时
-        读不到内容，而本单的证据要能把日志原文贴出来（04 §5.5 附7：判据不得依赖看不见的那一半）。"""
+        """[查看日志]：只读全文弹窗（用 QPlainTextEdit 而非消息框折叠区——离屏取证要能读到全文）。"""
         box = QDialog(self)
         box.setWindowTitle("下发与联动日志")
         box.resize(720, 420)
@@ -240,9 +260,25 @@ class Step5Pane(QWidget):
         self._repaint(self._counts, "deny" if dropped else "dim")
 
     def set_busy(self, on: bool) -> None:
-        """一次下发在途／结束。⛔ 不在此处判定能不能发——那属 `linkctl` 的在途锁与 T08 的门禁。"""
+        """一次下发在途／结束（⛔ 能不能发不在此判——那属 `linkctl` 在途锁与 T08 门禁）。"""
         self._busy = on
         self._refresh()
+
+    def set_paused(self, on: bool) -> None:
+        """PLC 暂停态（`status` 的 ST_PAUSED 位，控制器从回读帧投影）。"""
+        if on != self._paused:
+            self._paused = on
+            self._paused_line.setText(_PAUSED_TELL)
+            self._paused_line.setVisible(on)
+            self.remember(_PAUSED_TELL if on else "已恢复：PLC 清暂停态，继续执行")
+            self._refresh()
+
+    def override_pct(self) -> float:
+        return float(self._override.currentText().rstrip("%") or _OVERRIDES[-1])   # §9.1 步 1 倍率
+
+    def preference(self) -> str:
+        # 执行偏好（软件侧，Δ-1 的「连续/逐段」——语义说明在 _PREFERS 常量处）
+        return self._prefer.currentText()
 
     def set_gate(self, on: bool) -> None:
         """T08 禁发门禁的镜像（`checkctl._refresh_gate` 追加一行调它）：本页据此在忙态结束后还原按钮。"""
@@ -250,10 +286,12 @@ class Step5Pane(QWidget):
         self._refresh()
 
     def _refresh(self) -> None:
-        """四个状态 → 按钮可用性（一处算完 ⛔ 不散在各处 setEnabled，免得互相盖掉）。"""
         self._conn.setEnabled(not self._up and not self._busy)
         self._disc.setEnabled(self._up and not self._busy)
         self._follow_btn.setEnabled(self._up and not self._following)
         self._unfollow_btn.setEnabled(self._following)
+        self._pause_btn.setEnabled(self._up and self._busy and not self._paused)
+        self._resume_btn.setEnabled(self._up and self._busy and self._paused)
         self._halt_btn.setEnabled(self._up and self._busy)
+        self._reset_btn.setEnabled(self._up and not self._busy)
         self.send_btn.setEnabled(self._gate and not self._busy)

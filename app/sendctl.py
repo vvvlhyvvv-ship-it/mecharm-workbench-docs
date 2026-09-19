@@ -23,13 +23,13 @@ from __future__ import annotations
 import logging
 import time
 
-from PySide6.QtCore import QObject
+from PySide6.QtCore import QObject, QTimer, Signal
 from PySide6.QtWidgets import QApplication
 
 from app.linkctl import STAGES, LinkController
 from app.livectl import LiveController
 from app.sendseg import SendSegError, build_segments, describe_request
-from comm.opcua_client import SPEED_OVERRIDE_FULL, LinkState
+from comm.opcua_client import ST_PAUSED, LinkState
 from core.collision import CollisionResult
 
 log = logging.getLogger(__name__)
@@ -52,7 +52,11 @@ _DONE_TELL = "轨迹完成：模型停在实测终点。跟随仍在进行，要
 
 class SendController(QObject):
     """下发编排。对外只三个入口：`send()`（checkctl 确认之后）、`request_note()`（确认弹窗的小字）、
-    `shutdown()`（退出收摊）；其余全是把 linkctl／livectl 的信号投影到⑤页与状态栏。"""
+    `shutdown()`（退出收摊）；其余全是把 linkctl／livectl 的信号投影到⑤页与状态栏。T15 增执行控制
+    四命令（⏹停止＝既有 `halt`；⏸暂停／▶继续／⟲复位的接线见 `pause`/`resume`/`reset`——comm 侧
+    薄包装按蓝图 §6.2 授权）与倍率（SpeedOverride 实做，随下发块写 PLC）。"""
+
+    noted = Signal(str)           # 循环线程里协程跑完的人话（emit 跨线程自动排队到主线程 `_say`）
 
     def __init__(self, panel, statusbar, stepbar, pathctl, workmode, link, live,
                  parent: QObject | None = None) -> None:
@@ -64,6 +68,7 @@ class SendController(QObject):
         self._stage = 0            # 0＝没有下发在途（`_on_failed` 据此决定要不要画失败段）
         self._drop_note = ""       # 最近一次越界丢帧的人话（计数行常态刷新时要带上，见 `_on_counted`）
         self._wire()
+        self.noted.connect(self._say)
 
     def _wire(self) -> None:
         pane = self._pane
@@ -72,12 +77,16 @@ class SendController(QObject):
         pane.follow_requested.connect(self._live.start)
         pane.unfollow_requested.connect(self._live.stop)
         pane.halt_requested.connect(self.halt)
+        pane.pause_requested.connect(self.pause)
+        pane.resume_requested.connect(self.resume)
+        pane.reset_requested.connect(self.reset)
         self._link.stage.connect(self._on_stage)
         self._link.said.connect(self._say)
         self._link.failed.connect(self._on_failed)
         self._link.up.connect(self._on_up)
         self._link.done.connect(self._on_done)
         self._link.link_state.connect(self._on_link_state)
+        self._link.frames.connect(self._on_frames)
         self._live.changed.connect(self._on_follow_changed)
         self._live.counted.connect(self._on_counted)
         self._live.dropped.connect(self._on_dropped)
@@ -102,11 +111,46 @@ class SendController(QObject):
         self._link.stop()
 
     def halt(self) -> None:
-        """[停止运动]＝§9.2 的软件主动停止（置 CMD_STOP → PLC 减速停 → 等 ACK_STOP_DONE）。
+        """⏹ 停止＝§9.2 的软件主动停止（置 CMD_STOP → PLC 减速停 → 等 ACK_STOP_DONE）。
 
         ⛔ 不停跟随：停下之后的实测位置仍要照实显示，那正是操作员要确认的「真停在这儿了」。
         """
         self._link.abort()
+
+    def pause(self) -> None:
+        """⏸ 暂停＝CMD_PAUSE（§5.3，无专属 ACK 位 ⇒ 等 `status` 的 ST_PAUSED；comm 侧薄包装
+        `Handshake.pause`，命令字按脉冲语义在 finally 清零——蓝图 §6.2 授权）。"""
+        self._command("暂停", "已暂停：PLC 置暂停态（命令字已按脉冲语义清零）",
+                      lambda session: session.pause())
+
+    def resume(self) -> None:
+        """▶ 继续＝CMD_RESUME：等 ST_PAUSED **清零**（`_await_bits_cleared`）。"""
+        self._command("继续", "已恢复：PLC 清暂停态，继续执行（命令字已清零）",
+                      lambda session: session.resume())
+
+    def reset(self) -> None:
+        """⟲ 复位＝CMD_RESET（§5.3 现成包装）：清报警、回待机。**不承诺位置**——回零/回起点
+        属期 3（模拟器明写不建模回零轨迹，`comm/plc_logic.py:104`），人话只说协议在册的语义。"""
+        self._command("复位", "已复位：PLC 清报警并回待机态",
+                      lambda session: session.reset())
+
+    def _command(self, what: str, ok_tell: str, call) -> None:
+        """三枚命令的公共形状：链路在才发；成功人话经 `noted`（协程在循环线程收尾，emit 跨线程
+        排队回主线程 ⛔ 不直接碰界面）。异常由 `linkctl.submit` 统一转 `failed` 红条人话。"""
+        if not self._link.is_up:
+            self._pane.show_error(f"还没连接 PLC 模拟器，无法{what}：先点[连接本机模拟器]")
+            return
+        session = self._link._session    # 只读：linkctl 无公开 session 口且本单无该件写权（收单登记）
+        self._link.submit(self._run(call(session), ok_tell), what=what)
+
+    async def _run(self, coro, tell: str) -> None:
+        await coro
+        self.noted.emit(tell)
+
+    def _on_frames(self, batch: list) -> None:
+        """回读帧 → 暂停态投影（`status` 的 ST_PAUSED 位——§6.2 无专属 ACK，状态字是唯一权威）。"""
+        if batch:
+            self._pane.set_paused(bool(batch[-1].status & ST_PAUSED))
 
     # --- 下发（卡片步骤①：确认弹窗之后 → 写段＋命令字 → 五段进度 → 执行）----------- #
     def send(self, result: CollisionResult) -> bool:
@@ -133,7 +177,8 @@ class SendController(QObject):
         self._pane.finish_stage(_ASSEMBLE, f"下发块已组装：{len(path)} 段（槽位与倍率见确认弹窗的请求值）")
         self._on_counted(*self._live.stats())   # reset() 把计数清了，这里还原成真值（跟随未停时不为零）
         self._pane.set_busy(True)
-        self._link.send(path, SPEED_OVERRIDE_FULL, self._audit(result, path, mode))
+        override = self._pane.override_pct()    # SpeedOverride 实做（蓝图 §6.2；随下发块写 PLC）
+        self._link.send(path, override, self._audit(result, path, mode, override))
         return True
 
     def request_note(self) -> str:
@@ -147,15 +192,15 @@ class SendController(QObject):
         endpoint = self._link.endpoint or "（还没连接：下发会先被拒，请先点[连接本机模拟器]）"
         try:
             path = build_segments(self._pathctl.segments(), cfg, mode)
-            return describe_request(path, cfg, mode, SPEED_OVERRIDE_FULL, endpoint)
+            return describe_request(path, cfg, mode, self._pane.override_pct(), endpoint)
         except SendSegError as exc:
             return f"⛔ 下发块组装不出来：{exc}"
 
-    def _audit(self, result: CollisionResult, path, mode: str) -> str:
+    def _audit(self, result: CollisionResult, path, mode: str, override: float) -> str:
         """§9.1 步 9 的审计行：何时／哪条轨迹／结果／发给谁。「谁」本期只有软件自身 ⇒ 记会话端点（接入登录
         体系后由上层把操作者传进来，⛔ 不臆造身份；口径同 `comm` 的 `Session.run`）。只落日志 ⛔ 不上屏。"""
         return (f"{time.strftime('%Y-%m-%dT%H:%M:%S')} 端点 {self._link.endpoint}｜工作模式 "
-                f"{mode or '未选定'}｜{len(path)} 段｜倍率 {SPEED_OVERRIDE_FULL:g}%｜校核结论 "
+                f"{mode or '未选定'}｜{len(path)} 段｜倍率 {override:g}%｜校核结论 "
                 f"{result.verdict}｜路径指纹 {result.path_hash}")
 
     # --- linkctl 的信号 → ⑤页与状态栏 ---------------------------------------- #
@@ -248,4 +293,8 @@ def install_send_flow(win, checkctl) -> SendController:
     checkctl.send_confirmed.connect(send.send)
     checkctl.request_note = send.request_note
     QApplication.instance().aboutToQuit.connect(send.shutdown)
+    # T15：路径仿真页签的后绑定——本函数在 checkctl.__init__ 里跑，那时 build_workbench（tabshell／
+    # sim_tab）还没构造 ⇒ 借零毫秒定时器落到事件循环首拍再绑（KPI／时间轴／轨迹清单的数据源＝
+    # pathctl／checkctl／bridge，SimTab 只读投影；手法同 checkctl.request_note 的钩子回填先例）。
+    QTimer.singleShot(0, lambda: win.tabshell.sim.attach(win.pathctl, win.checkctl, win.bridge))
     return send
