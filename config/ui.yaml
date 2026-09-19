@@ -21,6 +21,12 @@ motion_enabled: true         # 动效开关（蓝图 §1-11）：false＝装饰�
 process_step_budget: 200     # ProcessStep 预算上限（招标第 7 条 ≥200 工步；T17 读）
 stage_default: auto          # 舞台默认档 auto/std/wide（蓝图 §5 档位取值表）
 
+# PLC 输出区三串声明文案（T17；蓝图 §6.3 逐字原文，⛔ 禁改写或缩写、禁合并复用）：
+#   第 2/3 串的「位置类指令需与 PLC 侧另行约定」是「我方不承诺联锁」的免责要点，缺半句即失真。
+plc_declare_top: 本输出为供电气 PLC 编程使用的工步数据与变量映射，不是我方交付的 PLC 程序。
+plc_declare_table: ⓘ 各轴 Position 为只读；位置类指令需与 PLC 侧另行约定。本输出供 PLC 侧编程使用，不含联锁保护逻辑。
+plc_declare_footer: ⓘ 字典中各轴 Position 为只读；位置类指令需与 PLC 侧另行约定。本输出供 PLC 侧编程使用，不含联锁保护逻辑。
+
 # 取证档覆盖节（裁决 7）：--ui-profile evidence 时覆盖上面同名键。
 # 占位文案一律中性（蓝图 V1.2 规范）：禁含真实方名称/编号/日期。
 evidence_profile:

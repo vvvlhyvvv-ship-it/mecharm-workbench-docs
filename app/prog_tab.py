@@ -25,6 +25,8 @@ from PySide6.QtWidgets import (QComboBox, QDoubleSpinBox, QGridLayout, QHBoxLayo
 
 from core.geometry.face_point import Waypoint
 
+from app.plc_out import PlcOutArea
+
 LATER_NOTE = "待后续版本"                  # 期 3 功能的禁用提示（Δ-7）
 CRAFT_NOTE = "待工艺口径"                  # 插入动作组的禁用提示（Δ-7，等 TBD-11）
 EXEC_NOTE = "执行控制在「路径仿真」页签，本页只编程（待后续版本）"
@@ -63,6 +65,8 @@ class ProgTab(QWidget):
         box.addWidget(panel.step3)
         panel.step3.show()
         box.addLayout(self._build_bottom())
+        self.plc_out = PlcOutArea()          # T17：PLC 输出区（演示稿画面 05，本单增件挂载）
+        box.addWidget(self.plc_out)
         box.addStretch(1)
         scroll.setWidget(stack)
         outer = QVBoxLayout(self)
@@ -96,10 +100,11 @@ class ProgTab(QWidget):
         parts = asm.stats.get("parts") if asm is not None else None
         pts = len(win.panel.step2.waypoints())
         segs = len(win.pathctl.segments())
-        states = (bool(win._brep_ok), pts > 0, win.pathctl.ready(), False)
+        steps = (self.plc_out._built or {}).get("steps") or []   # ④PLC 输出真值（指挥侧 2026-09-19 授权行）
+        states = (bool(win._brep_ok), pts > 0, win.pathctl.ready(), bool(steps))
         subs = (f"{parts} 件" if states[0] and parts else "—",     # ①随 _brep_ok：清空后统计过期
                 f"{pts} 点" if pts else "—",
-                f"{segs} 段" if segs else "—", "—")
+                f"{segs} 段" if segs else "—", f"{len(steps)} 工步" if steps else "—")
         now = next((i for i, ok in enumerate(states) if not ok), len(states))
         for i, (title, sub) in enumerate(self._flow):
             title.setProperty("tone", "ok" if states[i] else ("accent" if i == now else "dim"))
@@ -216,6 +221,7 @@ class ProgTab(QWidget):
     # --- 外壳数据注入（install_t14 调；构造时 pathctl 尚未存在，接线只能延后到这里）--- #
     def bind(self, win) -> None:
         self._win = win
+        self.plc_out.bind(win)               # T17：输出区接外壳（pathctl 失效联动/声明文案/日志）
         self._speed.currentIndexChanged.connect(
             lambda _i: win.pathctl.set_speed_override(self._speed.currentData()))
         self._btn_send.clicked.connect(lambda: win.tabshell.switch_to("sim"))   # Δ-4 跳转

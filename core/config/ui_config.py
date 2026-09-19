@@ -22,9 +22,12 @@ UI_SCHEMA_VER = "ui/v1"
 PROFILES = ("default", "evidence")
 STAGE_DEFAULTS = ("auto", "std", "wide")
 # 文本键：非空字符串（身份类文案，代码里禁写字面量——蓝图 §1-8）。
+# plc_declare_* 三串＝PLC 输出区的声明文案（T17，蓝图 §6.3 逐字原文；属声明类、非身份类，
+# 故不入 EVIDENCE_KEYS——取证档只需剥离甲方/投标标识，声明文案两档同文）。
 TEXT_KEYS = ("brand_name", "brand_sub", "system_name", "company", "company_en",
              "bidder_note", "bid_no", "watermark", "version_text",
-             "login_user_default", "login_name_default")
+             "login_user_default", "login_name_default",
+             "plc_declare_top", "plc_declare_table", "plc_declare_footer")
 INT_KEYS = ("splash_max_ms", "process_step_budget")     # 正整数（ms／工步数）
 # 取证档必须**全覆盖**的键：漏一键＝该身份串以真实值漏进取证画面（红线 12）。
 EVIDENCE_KEYS = ("company", "company_en", "bidder_note", "watermark", "bid_no",
@@ -50,6 +53,9 @@ class UiConfig:
     version_text: str
     login_user_default: str
     login_name_default: str
+    plc_declare_top: str
+    plc_declare_table: str
+    plc_declare_footer: str
     splash_max_ms: int
     motion_enabled: bool
     process_step_budget: int
