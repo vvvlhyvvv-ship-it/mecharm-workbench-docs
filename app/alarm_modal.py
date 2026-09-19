@@ -54,7 +54,7 @@ class AlarmModal(QDialog):
         box = QVBoxLayout(self)
         box.setContentsMargins(0, 0, 0, 0)
         box.setSpacing(10)
-        head = QLabel(f'<b style="color:#ffd9d9">● {_TITLE}</b>')
+        head = QLabel(f'<b style="color:{TOKENS["text"]}">● {_TITLE}</b>')   # 令牌色（收单修复：原散写 #ffd9d9）
         head.setStyleSheet(f"background:{TOKENS['deny']};padding:10px 14px;"
                            f"border-radius:{TOKENS['r_modal']}px {TOKENS['r_modal']}px 0 0;")
         box.addWidget(head)
