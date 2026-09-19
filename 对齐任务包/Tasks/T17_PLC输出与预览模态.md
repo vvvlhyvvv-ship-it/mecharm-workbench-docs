@@ -58,3 +58,5 @@
 > **裁④②（四步指示第④步＝授权一行改）**：授权 T17 对 `app/prog_tab.py` 做**最小 diff（≤5 行）**——第④槽「PLC 输出」接工步生成真值（生成后显示「N 工步」，未生成保持「—」），由 plc_out 生成事件驱动，`tools/e2e_plc.py` 加一条 ④ 点亮判据；prog_tab 其余 T14 已交付区仍禁改。此为 T14 卡面「done/now 两态由真实状态驱动：…已输出」的本意补全。
 
 ## 收单记录（指挥侧回填）
+
+> **收单记录（指挥侧 2026-09-19，一轮过＋裁④②接线核过）**：合并 `de53257`（feat `bb3e1d4`＋授权行 `d85ccb4`；wt-t17 先并 main 确认）。合并态复跑：pytest **326 绿**（＋test_process/test_process_export 19 例）／e2e_plc **9 PASS·0 FAIL**（P7＝④槽「—」→「N 工步」→作废回「—」全生命周期）／e2e_smoke **31 PASS**／e2e_collision 5 PASS／e2e_sim 7 PASS／config rc=0／lint rc=0（78 件）；三冻结脚本 rc=0×3。**MasterLink/J*.Command 全仓 grep＝6 处命中全为守卫断言自身**（e2e_plc P6/P7 反查表＋process.py docstring 禁令注），产出物（UI/CSV/变量映射）零命中，判据按意图达标。GUI-free：core/process.py 零命中。core/collision.py／core/path.py／core/project.py diff=0。行数帽：process 215／plc_out 267／plc_preview 206／prog_tab 287／e2e_plc 264。裁④②授权 diff 核验＝prog_tab +3/−2、plc_out +2，其余 T14 交付区零改动。四图目检过（未生成整体禁用＋「先在上方生成轨迹」、生成后汇总 1 工步/预算 1/200 真值、超预算黄警示 2/1 (200%) 如实呈现仍可导出、预览模态红条两行逐字含「位置类指令需与 PLC 侧另行约定」＋10 列工步表＋备注「估算值」＋真 NodeId）。两样张 CSV BOM（EF BB BF）在场；变量映射 27＝22 读＋5 写点表实况。三串声明文案与 §6.3 逐字一致（含第 2/3 串首词差异）。
