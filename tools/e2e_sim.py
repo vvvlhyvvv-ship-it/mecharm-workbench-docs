@@ -5,10 +5,10 @@
 标准的「e2e rc=0」以本件为准（e2e_smoke 全量 27 条由指挥侧收单时另跑确认不回退）。
 
 判据（对 T15 卡完成标准逐条；读**操作员看得见的那份原文**，同 smoke 口径）：
-  U1 空态：KPI 全「—」、清单 0 行、预演三钮禁用（Δ-6）｜U2 有数据态：KPI 真值＋时间轴带与校核一致
-  ＋涉事设备恒「—」＋「估算」在场｜U3 预演：▶ 播放 → 游标随 seg 推进 → ⏏ 退出停
-  U4 暂停/继续：ST_PAUSED 置位/清零＋命令字脉冲清零＋位姿冻结/恢复｜U5 倍率：25% 读回==25＋计划
-  时长比≥1.2｜U6 复位：人话＋无红条｜U7 停止：人话＋cmd 清零｜Δ-1：「连续/逐段」在场（禁三模式）。
+  U1 空态：KPI 全「—」、清单 0 行、预演三钮禁用（Δ-6）｜U2 有数据态：KPI 真值＋时间轴带与校核一致＋
+  设备列真值/「—」分明＋「估算」在场｜U3 预演：▶ 播放 → 游标随 seg 推进 → ⏏ 退出停
+  U4 暂停/继续：ST_PAUSED 置位/清零＋命令字脉冲清零＋位姿冻结/恢复｜U5 倍率：25% 读回==25＋计划时长
+  比≥1.2｜U6 复位：人话＋无红条｜U7 停止：人话＋cmd 清零｜Δ-1：「连续/逐段」在场（禁三模式）。
 
 顺序敏感：U3 在连接前；U4–U7 同一条链路顺路（⛔ 不重连）；U7 握手收尾不等待（drain 承担）。
 """
@@ -96,7 +96,7 @@ def _prepare(rig: Rig) -> None:
 
 
 def section_data(rig: Rig, results: dict, durations: dict) -> None:
-    """U2：有数据态——KPI 真值＋时间轴红绿带与校核一致＋涉事设备恒「—」＋「估算」在场。"""
+    """U2：有数据态——KPI 真值＋时间轴红绿带同校核＋设备列真值/「—」分明＋「估算」在场。"""
     tab, result = rig.win.tabshell.sim, rig.win.checkctl._result
     print("\n=== U2 有数据态（KPI·时间轴·清单）===")
     kpis = {key: label.text() for key, label in tab._kpis.items()}
@@ -105,18 +105,18 @@ def section_data(rig: Rig, results: dict, durations: dict) -> None:
     red_bands = sum(1 for _, _, bad in tab._bands if bad)
     rows = tab._table.rowCount()
     devices = {tab._table.item(row, 2).text() for row in range(rows)}
+    dev_ok = all((tab._table.item(r, 2).text() != "—") == (tab._table.item(r, 5).text() != "可行") for r in range(rows))  # 设备列（T16 回填）与状态列逐行分明
     estimate = [l for l in tab.findChildren(QLabel) if "预计时长（估算）" in l.text()]
-    print(f"  KPI：{kpis}｜结论行：{tab._summary.text()}｜时间轴 {len(tab._bands)} 带（红 {red_bands}）"
-          f"／{len(tab._ticks)} 刻度｜清单 {rows} 行 设备列{devices}｜估算标签在场={bool(estimate)}")
+    print(f"  KPI：{kpis}｜结论行：{tab._summary.text()}｜时间轴 {len(tab._bands)} 带（红 {red_bands}）／"
+          f"{len(tab._ticks)} 刻度｜清单 {rows} 行 设备列{devices} 分明={dev_ok}｜估算在场={bool(estimate)}")
     check(results, "U2", (result is not None and "≈" in kpis["dur"] and kpis["samples"].isdigit()
           and kpis["segs"].isdigit() and kpis["bad"] == str(sum(1 for c in result.cases if c.min_dist_mm <= 0.0))
           and kpis["gate"] in ("允许", "禁止") and "校核完成" in tab._summary.text()
           and red_bands == len(bad_ids) and len(tab._bands) == len(rig.win.pathctl.segments())
-          and len(tab._ticks) == len(rig.win.pathctl.segments())
-          and rows == len(rig.win.pathctl.segments()) and devices == {"—"}
-          and bool(estimate) and "估算" in estimate[0].text()),
+          and len(tab._ticks) == len(rig.win.pathctl.segments()) and rows == len(rig.win.pathctl.segments())
+          and dev_ok and bool(estimate) and "估算" in estimate[0].text()),
           "KPI 全真值（时长带≈与估算标签、干涉步＝结论、许可∈{允许,禁止}）；时间轴带/刻度＝段数、"
-          "红带数＝涉事段数；涉事设备列恒「—」（T16 前禁造设备名）")
+          "红带数＝涉事段数；涉事设备列真值/「—」与状态列逐行分明（T16 回填后口径）")
 
 
 def section_preview(rig: Rig, results: dict, durations: dict) -> None:

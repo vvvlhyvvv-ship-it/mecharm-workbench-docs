@@ -63,12 +63,12 @@ def _t1_topbar(rig: Rig, results: dict) -> None:
                           and LATER_NOTE in bar._assembly_btn.toolTip()
                           and not bar._measure_btn.isEnabled()
                           and LATER_NOTE in bar._measure_btn.toolTip()
-                          and bar._alarm_badge.text() == "—"
+                          and (bar._alarm_badge.text() == "—" or bar._alarm_badge.text().isdigit())
                           and not bar._enable.isEnabled()
                           and ENABLE_NOTE in bar._enable.toolTip()
                           and bar._user_name.text() == name and user in bar._user_no.text()),
           "顶栏七区：品牌读 ui.yaml；无模式组（Δ-1）无 21:9 预览（Δ-8）；装配体模式/测量禁用＋"
-          "「待后续版本」（Δ-7）；报警徽标位留接口显示「—」（T16 接数）；使能恒禁用＋「待契约回执」"
+          "「待后续版本」（Δ-7）；报警徽标＝无校核「—」／有校核为活动干涉组数（T16 已接数）；使能恒禁用＋「待契约回执」"
           "（Δ-11）；用户盒姓名/工号＝登录页当前值")
 
 

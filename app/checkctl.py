@@ -31,10 +31,12 @@ from collections.abc import Callable
 from PySide6.QtCore import QObject, Signal
 from PySide6.QtWidgets import QMessageBox
 
+from app.alarm_modal import popup as alarm_popup
 from app.sendctl import install_send_flow
 from app.steps.step4_check import Step4Pane
 from core.collision import (VERDICT_INTERFERE, VERDICT_WARN, CollisionError, CollisionResult,
                             CollisionScene, check, mode_axes, obstacles_from, path_fingerprint)
+from core.collision_report import group_by_device
 from core.path import summarize
 
 log = logging.getLogger(__name__)
@@ -60,6 +62,8 @@ class CheckController(QObject):
         self._pathctl = pathctl
         self._workmode = workmode
         self._result: CollisionResult | None = None
+        self._alarm = None                      # T16 阻断式报警模态（仅呈现；结果作废即关）
+        self._alarm_path = ""
         self._asm = None                       # 步骤①的导入结果（障碍几何来源；本层不复制几何）
         self._mesh_ids: dict[str, int] = {}    # 障碍名 → mesh_id（视口高亮用，⛔ 不存第二份真值）
         self._gate_on = False
@@ -148,6 +152,12 @@ class CheckController(QObject):
         self._show_viewport(result)
         if result.verdict != VERDICT_INTERFERE:
             self._stepbar.mark_completed(4)   # 干涉态不标完成：步骤④没走完（同 T07 的 summary.ok 口径）
+        elif not (self._alarm and self._alarm.isVisible()
+                  and self._alarm_path == result.path_hash):
+            # 阻断式报警模态（T16）：仅呈现、不裁决；同一结果已弹着就不重弹（复判路径防打扰）
+            self._alarm_path = result.path_hash
+            tree = self._asm.tree if self._asm is not None else ()
+            self._alarm = alarm_popup(self._panel, self._bridge, result, group_by_device(result, tree))
         self._refresh_gate()
         self._refresh_ready()
         self.changed.emit()
@@ -241,6 +251,8 @@ class CheckController(QObject):
     def _invalidate(self, why: str) -> None:
         had = self._result is not None
         self._result, self._mesh_ids = None, {}
+        if self._alarm is not None and self._alarm.isVisible():
+            self._alarm.close()                 # 结果作废 ⇒ 报警模态显示的旧结论一并撤下
         self._panel.step4.clear()
         self._bridge.call_view("collision.show", _CLEAR)
         if had:

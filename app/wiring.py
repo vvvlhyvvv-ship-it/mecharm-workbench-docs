@@ -24,6 +24,8 @@ from app.tabshell import TabShell
 from app.topbar import TopBar
 from app.workhead_panel import WorkheadPanel
 from core.config import REPO_ROOT, load_machine
+from core.collision import VERDICT_INTERFERE
+from core.collision_report import group_by_device
 from core.geometry.edit_model import (drop_mesh_parts, part_count, remove_parts)  # 子模块直取：
 from core.geometry.tessellate import encode_mesh_parts  # 包根 __all__ 是 T05 冻结面（守卫测试钉死），不动
 
@@ -135,6 +137,7 @@ def _wire_tabs(win) -> None:
     win.workmode.committed.connect(win.joints.set_mode)
     win.pathctl.changed.connect(lambda: win.tabshell.set_badge("prog", len(win.pathctl.segments())))
     win.checkctl.changed.connect(lambda: _on_check_result(win))
+    _wire_motion_flag(win)            # T16：装饰性动效开关推视口（蓝图 §1-11，见函数注）
     pane = win.tabshell.tree_pane
     pane.delete_selected.connect(lambda ids: _apply_scene(win, ids, "删除选中"))
     pane.delete_group.connect(lambda ids: _apply_scene(win, ids, "删除整组"))
@@ -148,6 +151,21 @@ def _wire_tabs(win) -> None:
         lambda t, d: _on_perf(win, t, d))
 
 
+def _wire_motion_flag(win) -> None:
+    """装饰性动效开关推视口（蓝图 §1-11）：``ui.yaml motion_enabled`` 经 ``runJavaScript`` 写 CSS
+    变量 ``--motion``（同 ``shell._push_viewport_fs`` 的 --fs 通道——**不是桥消息**，不占 dispatch
+    type）；视口侧 collision.js 读它停脉冲动画（关＝静态红标记，信息不丢）。接线时点在
+    ``viewpane.start()`` 之前 ⇒ loadFinished 必经。"""
+    flag = "1" if win.ui.motion_enabled else "0"
+
+    def _push(ok: bool) -> None:
+        if ok:
+            win.viewpane.page().runJavaScript(
+                f"document.documentElement.style.setProperty('--motion','{flag}')")
+
+    win.viewpane.view().loadFinished.connect(_push)
+
+
 def _on_perf(win, type_: str, data: object) -> None:
     """渲染 fps 芯片：只观察桥 ``perf.fps``（livectl 的同源数据，⛔ 不改它）。"""
     if type_ == "perf.fps" and isinstance(data, dict):
@@ -158,11 +176,19 @@ def _on_perf(win, type_: str, data: object) -> None:
 
 
 def _on_check_result(win) -> None:
-    """校核结论 → 判定灯/碰撞 ms 芯片/路径仿真页签徽标（真实值，无则 0）。"""
+    """校核结论 → 判定灯/碰撞 ms 芯片/路径仿真页签徽标（真实值，无则 0）；T16 连带：装配树涉事
+    零件整行红标＋顶栏「报警与日志」徽标＝活动干涉组数（无校核＝「—」，面板期 3、按钮禁用 Δ-7）。"""
     res = win.checkctl._result
     win.topbar.verdict.set_result(res)
     win.topbar.chips.set_ms(getattr(res, "elapsed_ms", None))
     win.tabshell.set_badge("sim", len(res.cases) if res else 0)
+    if res is not None:
+        report = group_by_device(res, win.checkctl._asm.tree if win.checkctl._asm else ())
+        win.tabshell.tree.mark_clash({case.part_b for case in res.cases})
+        win.topbar.set_alarm_count(len(report.by_device) if res.verdict == VERDICT_INTERFERE else 0)
+    else:
+        win.tabshell.tree.clear_clash()
+        win.topbar.set_alarm_count(None)
 
 
 def _on_clear_all(win) -> None:

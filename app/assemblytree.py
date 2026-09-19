@@ -1,9 +1,11 @@
-"""左栏装配树（T05 建树；T13 挂入页签＋工具行，裁决 6）。
+"""左栏装配树（T05 建树；T13 挂入页签＋工具行，裁决 6；T16 干涉件整行红标）。
 
 两个件：
   AssemblyTree     树本体（QTreeWidget，T05 语义原样：单击 selected／双击 focused 携叶子 id）；
                    T13 增**选中记忆**：``selected_ids()``＝最近点选的叶子 id（「删除选中」用）、
                    ``selected_group_ids()``＝其顶层组的叶子 id（「删除整组」用；顶层零件＝自身）。
+                   T16 增**干涉红标**：``mark_clash(names)`` 把涉事零件整行染红——三通道（⚠ 前缀
+                   图标＋红字＋深红底，颜色取 theme TOKENS ⛔ 不散写色值）、``clear_clash()`` 复位。
   AssemblyTreePane 装配树页签体：工具行＝「删除选中（未选中 disabled，演示稿同位）／删除整组／
                    清空全部模型（二次确认，``_ask`` 可替身）」＋「选中件装配」三选/绑定到/应用/解除
                    **按演示稿位置渲染但一律禁用**＋「待后续版本」（Δ-9：``pose.update`` 按连杆名
@@ -16,11 +18,16 @@
 from __future__ import annotations
 
 from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QBrush, QColor
 from PySide6.QtWidgets import (QComboBox, QHBoxLayout, QLabel, QMessageBox, QPushButton,
                                QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget)
 
+from app.theme import TOKENS
+
 LATER_NOTE = "待后续版本"
 CLEAR_TITLE = "清空全部模型"
+CLASH_MARK = "⚠ "                    # 干涉行前缀图标（三通道之一；与红字/深红底并用）
+_CLASH_TIP = "该零件检出干涉：见「路径仿真」页签干涉清单（点击行可在三维视口定位）"
 # 每个 item 的 data 槽：节点 id 与「是否装配」。
 _ROLE_ID = Qt.ItemDataRole.UserRole
 _ROLE_ASSY = Qt.ItemDataRole.UserRole + 1
@@ -86,6 +93,38 @@ class AssemblyTree(QTreeWidget):
         for i in range(item.childCount()):
             ids.extend(self._leaf_ids(item.child(i)))
         return ids
+
+    # --- 干涉红标（T16）：三通道 ⚠ 图标＋红字＋深红底；树重建（populate）后自然归零 ------ #
+    def mark_clash(self, names: set[str] | list[str]) -> int:
+        """把名字在 ``names`` 里的零件行整行染红（演示稿 ``.tn.bad`` 同构），返回红标行数。
+        只改既有行样式（本件现有高亮通道＝QTreeWidgetItem 底色/前景，同 step4 列表手法）；
+        底/字色由 TOKENS deny 派生（⛔ 不散写新色值）；空集合＝全清。"""
+        wanted = {str(n) for n in names}
+        count = 0
+        bg = QBrush(QColor(TOKENS["deny"]).darker(420))     # 深红底（≈演示稿 .tn.bad 的 #1d1213 观感）
+        fg = QBrush(QColor(TOKENS["deny"]).lighter(160))    # 浅红字（深底上可读）
+        stack = [self.topLevelItem(i) for i in range(self.topLevelItemCount())]
+        while stack:
+            item = stack.pop()
+            stack.extend(item.child(i) for i in range(item.childCount()))
+            base = item.text(0).removeprefix(CLASH_MARK)
+            if base in wanted:
+                count += 1
+                item.setText(0, CLASH_MARK + base)
+                item.setToolTip(0, _CLASH_TIP)
+                for col in (0,):
+                    item.setBackground(col, bg)
+                    item.setForeground(col, fg)
+            elif base != item.text(0) or item.toolTip(0):   # 原红标行已不在涉事清单 ⇒ 复位
+                item.setText(0, base)
+                item.setToolTip(0, "")
+                item.setBackground(0, QBrush())
+                item.setData(0, Qt.ItemDataRole.ForegroundRole, None)
+        return count
+
+    def clear_clash(self) -> None:
+        """红标复位（校核结果作废后由外壳随刷新调用；空集合 mark_clash 等价）。"""
+        self.mark_clash(set())
 
 
 class AssemblyTreePane(QWidget):
