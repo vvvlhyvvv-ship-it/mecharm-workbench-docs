@@ -42,7 +42,8 @@ from core.geometry.face_point import FacePoint
 from tests.cad_samples import write_step
 
 CONFIG = pathlib.Path("config/machine.yaml")
-MODE_INDEX = 4               # 顶栏下拉第 4 项＝「氧化皮破碎臂」（7 轴 ≤ pack_profile 的 8 槽位）
+MODE_INDEX = 3               # 五臂列表第 3 行（0-based）＝「氧化皮破碎」（7 轴 ≤ pack_profile 的 8 槽位；
+                             # T13 前顶栏下拉带「未选定」项故为 4——列表迁右栏后无该项，判据语义不变）
 THREE_POINTS = ((0.0, 0.0, 0.0), (100.0, 0.0, 0.0), (200.0, 0.0, 0.0))
 BOX = (40.0, 40.0, 40.0)     # 自造障碍基本体（⛔ 非甲方工件尺寸）
 BOX_AT = (208.0, -20.0, -20.0)   # X 下角 208 ⇒ 与 200 mm 终点留 8 mm < clearance_warn 20 ⇒ 🟡 预警
@@ -72,7 +73,7 @@ class Rig:
         self.sent: list[tuple[str, object]] = []
         real = self.win.bridge.call_view
         self.win.bridge.call_view = lambda t, p=None: (self.sent.append((t, p)), real(t, p))[1]
-        self.win.workmode.setCurrentIndex(MODE_INDEX)     # 真下拉 ⇒ committed ⇒ 解锁②③
+        self.win.workmode.select_row(MODE_INDEX)      # 真列表行 ⇒ committed ⇒ 解锁②③（T13 起列表迁右栏）
         self.flow = self.win.checkctl.send_flow
         self.stages: list[tuple[int, str]] = []           # `Signal(int, str)` ⇒ 槽必须收两个实参
         self.flow.link.stage.connect(lambda n, text: self.stages.append((n, text)))
@@ -86,12 +87,18 @@ class Rig:
         return True
 
     # --- 驱动 --------------------------------------------------------------- #
+    def tab(self, key: str) -> None:
+        """切左栏页签：真点页签头按钮（tree/prog/sim；T13 导航判据走真控件路径）。"""
+        self.win.tabshell.switch_to(key)
+
     def goto(self, n: int) -> None:
-        """切到第 n 步：发 `stepbar.step_clicked`，走 shell 的真导航槽（`_on_step_clicked`）。
+        """切到第 n 步：先把承载该步的页签翻到前台（T13 范式），再发 `stepbar.step_clicked`
+        走 shell 的真导航槽（薄壳 L-7：信号照旧，槽内 set_step/pick 态语义不变）。
 
         ⚠️ QStackedWidget 里**非当前页的子控件同样不可见** ⇒ 要判⑤页的红条／[查看日志] `isVisible()`，
-        得先把⑤页真翻到前台，否则读到的 False 是「没翻到这一页」而不是「代码没把它显示出来」。
+        得先把⑤页所在页签真翻到前台，否则读到的 False 是「没翻到这一页」而不是「代码没把它显示出来」。
         """
+        self.tab("prog" if n <= 3 else "sim")
         self.win.stepbar.step_clicked.emit(n)
 
     def pump(self, ms: float) -> None:

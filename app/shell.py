@@ -1,12 +1,13 @@
-"""工作台主窗体（02 V2.0 §1 全局骨架的装配处；T12 改多页宿主）。
+"""工作台主窗体（02 V2.0 §1 全局骨架的装配处；T12 改多页宿主，T13 范式切换）。
 
 启动序列：载入页→登录页→主界面，同一 MainWindow 内**原地切换、不另开窗**（裁决 9）——
-载入/登录＝app/splash.py 两态页（恒 1920×1080 逻辑构图）；主界面＝原三栏工作台（顶栏/
-左右栏内部结构归 T13，本单不动）。舞台＝app/stage.py（蓝图 §5 固定逻辑尺寸＋等比缩放，
-载入/登录不参与 wide 档）。启动里程碑只报真实发生的步骤（app/splash.BootMilestones）：
-ICU 计时由 run.py 回填、配置/点表/缓存在 main() 实测、「视口就绪」取 ViewPane.loadFinished。
-控制器构造、工作台装配与信号连接在 app/wiring.py（本件曾 300 行零余量，T12 瘦身后
-T13 接手续改）。颜色/字号一律走 app.theme 全局 QSS，本模块不写内联样式。
+载入/登录＝app/splash.py 两态页（恒 1920×1080 逻辑构图）；主界面＝app/wiring.py 装配的
+**T13 范式**：顶栏七区（app/topbar.py）｜左三页签（app/tabshell.py）｜右栏常驻双面板
+（workhead/joints）｜底栏；StepBar 退役为薄壳（仍实例化、不进布局，99 台账 L-7）。
+舞台＝app/stage.py（蓝图 §5 固定逻辑尺寸＋等比缩放，载入/登录不参与 wide 档）。启动里程碑
+只报真实发生的步骤（app/splash.BootMilestones）：ICU 计时由 run.py 回填、配置/点表/缓存在
+main() 实测、「视口就绪」取 ViewPane.loadFinished。控制器构造、工作台装配（T13 重排）与信号
+连接在 app/wiring.py。颜色/字号一律走 app.theme 全局 QSS，本模块不写内联样式。
 """
 
 from __future__ import annotations
@@ -88,6 +89,7 @@ class MainWindow(QMainWindow):
             user, name = self.splash.login_values()
         self._splash_guard.stop()
         self.stage_host.show_workbench()
+        self.topbar.set_user(user, name)   # 用户盒以登录页实值回填（T13 顶栏）
         self.statusbar.log(f"已进入系统：{name}（{user}）")
 
     def return_to_login(self) -> None:
@@ -198,14 +200,18 @@ class MainWindow(QMainWindow):
         self.bridge.call_view("mesh.load", {"reset": True, "parts": res["payload"]})
         self.pathctl.invalidate("已导入新模型")
         self.panel.step2.clear()              # 新模型 → 原点位 source_face 失效，结果作废
-        self.tree.populate(asm.tree_payload())
+        self.tabshell.tree.populate(asm.tree_payload())   # T13：树在左栏装配树页签内
         self.stepbar.mark_completed(1)        # 红线④：步骤①导入成功即标记完成
         self._brep_ok = bool(asm.is_brep)
         self._refresh_unlock()
         name = pathlib.Path(asm.source_path).name
         kind = "实体模型 ✓" if asm.is_brep else "面片模型 ✗（不能用于编程，步骤②保持锁定）"
         tail = "；原点位已作废" if had_points else ""
-        self.statusbar.log(f"已导入 {name}，{asm.stats.get('parts', 0)} 个零件，{kind}{tail}")
+        count = asm.stats.get("parts", 0)
+        self.topbar.set_import_count(count)          # T13：件数徽标（顶栏＋页签，真实值）
+        self.tabshell.set_badge("tree", count)
+        self.tabshell.tree_pane.refresh_buttons()
+        self.statusbar.log(f"已导入 {name}，{count} 个零件，{kind}{tail}")
 
     def _on_tree_selected(self, ids: list) -> None:
         self.bridge.call_view("hl.set", {"ids": ids, "semantic": "ok"})
@@ -228,8 +234,8 @@ class MainWindow(QMainWindow):
         self._left_btn.setText("◀" if vis else "▶")
 
     def _toggle_right(self) -> None:
-        vis = not self.panel.isVisible()
-        self.panel.setVisible(vis)
+        vis = not self._right_pane.isVisible()   # T13：右栏＝常驻双面板容器（Δ-10 折叠钮保留）
+        self._right_pane.setVisible(vis)
         self._right_btn.setText("▶" if vis else "◀")
 
 

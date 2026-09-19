@@ -10,7 +10,7 @@
 本件＝判据表＋入口＋卡片步骤⑦ 的 A–G 判据；``tools/e2e_rig.py``＝装置（起壳／驱动 UI／读数）；
 ``tools/e2e_faults.py``＝卡片步骤④ 的 H1–H3 判据。⛔ 入口与退出码只在本件一处。
 
-十九条判据分九节：**A** 发布周期守卫（G20-②：``publish_interval_ms ≤ 50`` ⇔ ≥20 Hz；静默改 60 时 pytest
+十九条判据分九节（T13 起**另加 T1–T8 页签级判据**，拆在 ``tools/e2e_tabs.py``——L-2 预授权）：**A** 发布周期守卫（G20-②：``publish_interval_ms ≤ 50`` ⇔ ≥20 Hz；静默改 60 时 pytest
 仍全绿、只有本件会红 ⇒ 负控证据＝临时改 60 跑出 A 节 FAIL 再还原）；**S** T12 启动序列（经登录页
 进主界面／舞台档位表 std·wide·1366／取证档身份剥离）；**B–E** 步骤①→④ 各步真做完；**F**
 下发块组装守卫（轴数 > 槽位数 ⇒ 人话拒绝并点名放不下的轴，⛔ 不静默截断）；**G1–G7** 连接／确认弹窗的
@@ -47,6 +47,7 @@ from core.config.ui_config import load_ui  # noqa: E402
 from tools.comm_selftest_kit import check, force_utf8_stdout, guarded, recording  # noqa: E402
 from tools.e2e_faults import section_h  # noqa: E402  卡片步骤④ 异常三用例的判据（拆件理由见那件 docstring）
 from tools.e2e_rig import CONFIG, STAGES, THREE_POINTS, Rig  # noqa: E402
+from tools.e2e_tabs import TAB_OFFLINE, TAB_ONLINE  # noqa: E402  T13 起页签级判据（L-2 预授权拆件）
 
 OUTPUT = pathlib.Path("evidence/T10/e2e_smoke.txt")
 UI_CONFIG = pathlib.Path("config/ui.yaml")   # T12 S 节：取证档判据读同一份真实交付物
@@ -246,8 +247,9 @@ PLAN: tuple[tuple[str, str, object], ...] = (
     ("G1", "连接", section_g), ("G2", "确认弹窗请求值", None), ("G3", "握手五段", None),
     ("G4", "pose.update 出前端", None), ("G5", "角标实测频率", None), ("G6", "帧计数", None),
     ("G7", "模式互斥", None),
+) + TAB_ONLINE + (                                   # T1–T6 须在 G（在线）与 H（断网）之间
     ("H1", "越界丢帧", section_h), ("H2", "PLC 拒绝", None), ("H3", "断线冻结", None),
-)
+) + TAB_OFFLINE                                      # T7–T8 须在 H 后（H2 还要有效路径、H3 后判离线）
 
 
 def selected(key: str, only: str) -> bool:

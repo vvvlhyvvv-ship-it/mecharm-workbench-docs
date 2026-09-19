@@ -1,4 +1,11 @@
-"""顶栏五步进度条（02 设计方案 §1：步骤条即导航）。
+"""顶栏五步进度条（02 设计方案 §1：步骤条即导航；02 V2.0 起范式切换）。
+
+⚠️ **T13 起退役为薄壳（99 台账 L-7，⛔ 不是 git rm）**：导航职责移交 `app/tabshell.py` 三页签；
+本件保留 `STEP_LABELS` 与 `StepBar` 类，shell 仍实例化 `self.stepbar` 但**不加入任何布局**（界面上
+不可见）——`mark_completed()`／`step_clicked` 信号／`_completed` 供 `app/checkctl.py`／`pathctl.py`／
+`sendctl.py`、`tools/e2e_rig.py` 与冻结取证脚本（evidence/T07、T08）照常使用。步骤完成态改由页签
+徽标＋页内四步流水线指示（T14）表达；step1–5 的 `STEP_LABELS` 引用由 T14/T15/T16 各自清理，
+最后清理者（或指挥方）删件。
 
 三态：当前步高亮 / 未达置灰不可跳 / 完成可回看。对外只暴露：
   set_step_enabled(n, bool)  开关某步是否可达（置灰↔可点）

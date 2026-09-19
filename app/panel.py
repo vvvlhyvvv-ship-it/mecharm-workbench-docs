@@ -1,8 +1,11 @@
-"""右栏上下文面板（02 设计方案 §2/§5：内容随步骤切换）。
+"""五步业务页的构造与暂挂宿主（02 §2/§5；**T13 起退役为暂挂宿主**）。
 
-本模块只做**装页与切页**，⛔ 不含任何业务：五步的业务页各在自己文件里
-（①`app/steps/step1_import.py` ②`step2_pick.py` ③`step3_path.py` ④`step4_check.py` ⑤`step5_send.py`），
-控制器在 `app/pathctl.py`／`app/checkctl.py`／`app/sendctl.py`。
+本模块只做**构造**，⛔ 不含任何业务：五步的业务页各在自己文件里（①`app/steps/step1_import.py`
+②`step2_pick.py` ③`step3_path.py` ④`step4_check.py` ⑤`step5_send.py`），控制器在
+`app/pathctl.py`／`app/checkctl.py`／`app/sendctl.py`。T13 范式切换后本件**不再进任何布局**：
+①–③页被 `app/prog_tab.py`、④–⑤页被 `app/sim_tab.py` 取走堆叠（页控件 addWidget 即改父，本件
+的内部栈随之清空）；保留本件＝保留五个 step 页的唯一构造处与既有属性名（T14/T15 重写页签体时
+仍从这里取页）。成形归 T14/T15。
 
 `send_btn`／`send_note` 两个属性名照旧交回给 `app.checkctl` 做**禁发门禁**（T08 卡片步骤 5 的第一条拦截）；
 T10 起它们指向 `Step5Pane` 上的同名控件，门禁代码零改动。
