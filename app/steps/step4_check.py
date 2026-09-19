@@ -1,9 +1,11 @@
-"""app.steps.step4_check —— 右栏步骤④「碰撞校核」业务页（T08；02 §2 步骤④、04 §7.2-G19）。
+"""app.steps.step4_check —— 右栏「碰撞校核」三态卡（T08 建；T16 起为**薄适配壳**保留）。
 
-单一职责＝**三态卡片与干涉列表的视图**；判定真值（三态／最小距离／覆盖面／耗时）由
-`core.collision.check` 算出、经 `app.checkctl` 注入（`show_result`）——本页 ⛔ 不算几何、⛔ 不持有
-机台参数、⛔ 不自造结论措辞（03 §3 单向数据流、02 §2 禁止事项）。用户意图经信号回灌控制器：
-`check_requested`／`case_clicked`／`log`。
+**T16 定位（99 台账 L-7／文件归属矩阵）**：干涉清单／报警模态／KPI 的呈现已由 T16 升级到
+`app/sim_tab.py`（路径仿真页签③区）＋`app/alarm_modal.py`（阻断式模态）＋`core/collision_report.py`
+（归并层）；本件**保留**右栏三态卡片与干涉列表（双通道冗余、语义不变，T16 卡步骤 6），`Step4Pane`
+对外签名不变（`app/checkctl.py`／`app/panel.py` 照常引用），⛔ 不删件。本页 ⛔ 不算几何、⛔ 不持有
+机台参数、⛔ 不自造结论措辞；判定真值由 `core.collision.check` 算出、经 `app.checkctl` 注入
+（`show_result`）。用户意图经信号回灌控制器：`check_requested`／`case_clicked`／`log`。
 
 五件可见元素（02 §2 步骤④＋G19）：
   ① [开始校核] 主按钮（16px 粗体、高≥40px、占右栏整宽，02 §4）
@@ -28,10 +30,10 @@ from PySide6.QtGui import QBrush, QColor, QPalette
 from PySide6.QtWidgets import (QAbstractItemView, QHeaderView, QLabel, QPushButton, QTableWidget,
                                QTableWidgetItem, QVBoxLayout, QWidget)
 
-from app.stepbar import STEP_LABELS
 from app.theme import TOKENS
 from core.collision import VERDICT_INTERFERE, VERDICT_PASS, VERDICT_WARN, CollisionResult
 
+_TITLE = "碰撞校核"   # 右栏卡片标题（T16 起脱钩 StepBar 的 STEP_LABELS，L-7 清理）
 _COLS = ("段号", "涉事部件", "最小距离 mm")
 _ICON = {VERDICT_PASS: "🟢", VERDICT_WARN: "🟡", VERDICT_INTERFERE: "🔴"}   # 02 §2 步骤④ 原文
 _TONE = {VERDICT_PASS: "ok", VERDICT_WARN: "warn", VERDICT_INTERFERE: "deny"}
@@ -64,7 +66,7 @@ class Step4Pane(QWidget):
         box = QVBoxLayout(self)
         box.setContentsMargins(16, 16, 16, 16)
         box.setSpacing(10)
-        title = QLabel(STEP_LABELS[3])
+        title = QLabel(_TITLE)
         title.setObjectName("PlaceholderTitle")
         self._hint = QLabel(_EMPTY_HINT)
         self._idle_hint = _EMPTY_HINT      # 提示行底文案：出过结果后升为 _DONE_HINT（clear 复位）
