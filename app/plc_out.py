@@ -189,6 +189,7 @@ class PlcOutArea(QWidget):
             self._summary.setText(READY_NOTE if has_path else NO_PATH_NOTE)
             self._summary.setProperty("tone", "dim")
         _repaint(self._summary)
+        self._win.tabshell.prog.refresh_flow(self._win)   # ④槽真值（指挥侧 2026-09-19 授权接线）
 
     def _set_enabled(self, on: bool) -> None:
         """未生成路径 ⇒ 输出区整体禁用（卡片步骤 6）。"""
@@ -214,6 +215,7 @@ class PlcOutArea(QWidget):
         self._refresh_summary(steps, self._built["limit"])
         [btn.setEnabled(True) for btn in (self._btn_preview, self._btn_export, self._btn_copy)]
         self.log.emit(f"已生成工步数据：{len(steps)} 工步（编排 {self._mode.currentText()}）")
+        self._win.tabshell.prog.refresh_flow(self._win)   # ④槽点亮「N 工步」（同上授权接线）
 
     def _refresh_summary(self, steps, limit: int) -> None:
         """汇总行＋徽标：预算超限 ⇒ 黄警示＋「如实呈现，仍可导出」（硬换行短行，窄列下必可见）。"""

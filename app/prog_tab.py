@@ -100,10 +100,11 @@ class ProgTab(QWidget):
         parts = asm.stats.get("parts") if asm is not None else None
         pts = len(win.panel.step2.waypoints())
         segs = len(win.pathctl.segments())
-        states = (bool(win._brep_ok), pts > 0, win.pathctl.ready(), False)
+        steps = (self.plc_out._built or {}).get("steps") or []   # ④PLC 输出真值（指挥侧 2026-09-19 授权行）
+        states = (bool(win._brep_ok), pts > 0, win.pathctl.ready(), bool(steps))
         subs = (f"{parts} 件" if states[0] and parts else "—",     # ①随 _brep_ok：清空后统计过期
                 f"{pts} 点" if pts else "—",
-                f"{segs} 段" if segs else "—", "—")
+                f"{segs} 段" if segs else "—", f"{len(steps)} 工步" if steps else "—")
         now = next((i for i, ok in enumerate(states) if not ok), len(states))
         for i, (title, sub) in enumerate(self._flow):
             title.setProperty("tone", "ok" if states[i] else ("accent" if i == now else "dim"))

@@ -194,6 +194,26 @@ def section_stale(rig: Rig, results: dict, _d: dict) -> None:
           "pathctl.changed ⇒ 已生成工步作废＋重生成提示在场（卡片步骤 6 失效联动）")
 
 
+def section_flow_step4(rig: Rig, results: dict, _d: dict) -> None:
+    """P7：编程页签四步流水线第④槽接工步真值（指挥侧 2026-09-19 授权行）——
+    路径已生成但未生成工步 ⇒ 恒「—」（禁假装）；点[生成] ⇒ 点亮「N 工步」；改点位作废 ⇒ 回「—」。"""
+    prog, area = rig.win.tabshell.prog, AREA(rig)
+    print("\n=== P7 四步流水线第④槽点亮（PLC 输出真值）===")
+    rig.win.pathctl.generate()                 # P5 后点位仍在 ⇒ 重新生成 1 段（工步未生成）
+    rig.pump(200)
+    idle = prog._flow[3][1].text()
+    area._btn_build.click()                    # 生成工步 ⇒ ④槽点亮
+    lit = prog._flow[3][1].text()
+    lit_tone = prog._flow[3][0].property("tone")
+    n = len(area._built["steps"])
+    rig.win.panel.step2.clear()                # 改点位 ⇒ 路径/工步双作废 ⇒ ④槽回「—」
+    rig.pump(300)
+    gone = prog._flow[3][1].text()
+    print(f"  路径就绪未生成工步={idle!r}｜生成 {n} 工步后={lit!r}（tone={lit_tone}）｜作废后={gone!r}")
+    check(results, "P7", idle == "—" and lit == f"{n} 工步" and lit_tone == "ok" and gone == "—",
+          "④槽「PLC 输出」由 plc_out 生成事件驱动：未生成恒「—」、生成点亮「N 工步」（tone ok）、作废回「—」")
+
+
 def main(argv=None) -> int:
     args = parse(argv)
     force_utf8_stdout()
@@ -238,7 +258,7 @@ def parse(argv=None):
 # (判据号, 入口)；PREP 哨兵＝导入/取点/生成/校核（无判据）
 PLAN = (("P1", section_empty), ("PREP", None), ("P2", section_generate),
         ("P2B", section_over_budget), ("P3", section_preview), ("P4", section_export),
-        ("P5", section_stale))
+        ("P5", section_stale), ("P7", section_flow_step4))
 
 if __name__ == "__main__":
     raise SystemExit(main())
