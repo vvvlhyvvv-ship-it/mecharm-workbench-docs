@@ -159,6 +159,19 @@ _QSS = Template(
     QPushButton:hover:!disabled { border-color: $accent_deep; }
     QPushButton:disabled { background-color: $off_bg; color: $off_text; }
 
+    /* ---- 左栏三页签（T13 范式）：动态属性 state=current/todo ——
+       T13 建件时本表冻结无法配样式，指挥侧 2026-09-19 补（页签头高＝tab_h 令牌） ---- */
+    QPushButton[state="current"] {
+        background-color: $bg_card; color: $text; border: 1px solid $border;
+        border-bottom: 2px solid $accent; min-height: ${tab_h}px;
+        padding: ${s1}px ${s3}px; font-size: ${body_px}px; border-radius: ${r_ctl_s}px;
+    }
+    QPushButton[state="todo"] {
+        background-color: $bg_panel; color: $text_dim; border: 1px solid transparent;
+        min-height: ${tab_h}px; padding: ${s1}px ${s3}px; font-size: ${body_px}px;
+        border-radius: ${r_ctl_s}px;
+    }
+
     /* ---- 工作模式选择器 / 下拉 ---- */
     QComboBox {
         background-color: $bg_card; color: $text; border: 1px solid $border;

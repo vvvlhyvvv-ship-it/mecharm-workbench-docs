@@ -19,6 +19,7 @@ from PySide6.QtWidgets import QApplication, QPushButton  # noqa: E402
 from app.panel import Panel  # noqa: E402
 from app.pathctl import PathController, _lerp  # noqa: E402
 from app.statusbar import StatusBar  # noqa: E402
+from core.config.ui_config import load_ui  # noqa: E402
 from app.stepbar import StepBar  # noqa: E402
 from core.geometry.face_point import FacePoint  # noqa: E402
 from core.path import summarize, tool_pose_in_model  # noqa: E402
@@ -73,7 +74,9 @@ class Rig:
 
     def __init__(self):
         self.qapp = QApplication([])
-        self.stepbar, self.statusbar = StepBar(), StatusBar()
+        # T12 起 StatusBar 必填 ui（UiConfig）——冻结脚本由指挥侧 2026-09-19 补参修复（T12 回归，99 台账 T13 收单记录）
+        self.stepbar, self.statusbar = StepBar(), StatusBar(
+            load_ui(os.path.join(OUT, "..", "..", "config", "ui.yaml")))
         self.panel, self.bridge = Panel(), StubBridge()
         self.ctl = PathController(self.panel, self.bridge, self.stepbar, self.statusbar)
         self.panel.step2.set_mode("多功能臂A")
