@@ -7,11 +7,11 @@
 00 README §五纪律 ｜ 01 蓝图 **V1.2** §3.8 PLC 输出预览模态、**§6.3（口径最密的一节，含三串声明文案逐字原文）**、§4-B/C、**§7 Δ-4／Δ-5／Δ-6／Δ-7** ｜ 99 台账「文件归属矩阵」＋**L-8／L-9** ｜ 演示稿画面 05/09（`window.__MODAL_PLC__`＝HTML:706）｜ 现读 `core/path.py` 段结构（**只读**）、`config/machine.yaml` `opcua` 节点表（读写节点全表）、`config/ui.yaml`（`process_step_budget`，T12 已建）、`core/project.py`（**299/300，只读**）、`app/prog_tab.py`（T14 已收单版）、`core/config/schema.py`、`tools/lint_no_magic.py`
 
 ## 文件归属（唯一写者）
-- 改：`app/prog_tab.py`（底部**追加** PLC 输出区挂载；T14 已收单后本单追加，⛔ 不改其已交付区）、`config/ui.yaml`＋`core/config/schema.py`（**只追加 §6.3 三串声明文案键**，波次 3b 内 ui.yaml 归本单）、`tools/e2e_tabs.py`（追加本单判据）
+- 改：`app/prog_tab.py`（底部**追加** PLC 输出区挂载；T14 已收单后本单追加，⛔ 不改其已交付区）、`config/ui.yaml`＋`core/config/schema.py`（**只追加 §6.3 三串声明文案键**，波次 3b 内 ui.yaml 归本单）、`tools/e2e_plc.py`（**新增，指挥侧 2026-09-19 预声明**——e2e_tabs 已满冻结；本单判据专属 standalone 件，≤300 行）
 - 增件：`core/process.py`（工步编排纯函数层，**GUI-free：无 PySide6 import**）、`app/plc_out.py`（输出区＋预览模态 UI）、`tests/test_process.py`、`tests/test_process_export.py`
 - ⛔ 禁改：`comm/**`（**本单零通讯**）、`core/path.py`（T15 域，只读其段结构）、**`core/project.py`（299/300，只剩 1 行余量 ⇒ 只可读其 API；需加函数先停下上报，L-8）**、`core/collision.py`（300/300）、`app/sim_tab.py`／`app/checkctl.py`／`app/steps/step4_check.py`／`view/js/collision.js`／`app/assemblytree.py`（**T16 并行域**）、`app/topbar.py`／`tabshell.py`（T13 已收单）、`app/theme.py`、`view/js/**`、`app/stepbar.py`
 
-> **e2e 归属（L-2）**：本单判据追加到 `tools/e2e_tabs.py`；与 T16 并行时**后收单者 rebase**。
+> **e2e 归属（L-2，2026-09-19 指挥侧改路由）**：本单判据落 **`tools/e2e_plc.py`**（预声明新件，≤300）；`e2e_tabs.py` 冻结。与 T16 文件集零交集（各落各件）⇒ 合并序＝先完工先收。
 
 ## 步骤
 1. `core/process.py` 纯函数（**GUI-free，无 PySide6 import**；收单会核）：
