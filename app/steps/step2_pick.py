@@ -26,7 +26,6 @@ from PySide6.QtWidgets import (QAbstractItemView, QHeaderView, QLabel,
                                QPushButton, QTableWidget, QTableWidgetItem, QVBoxLayout,
                                QWidget)
 
-from app.stepbar import STEP_LABELS
 from core.config import REPO_ROOT, ConfigError, load_machine
 from core.geometry.face_point import FacePoint, Waypoint
 
@@ -53,6 +52,8 @@ class Step2Pane(QWidget):
         self._next_id = 1
         self._loading = False              # 程序刷新表格时屏蔽 cellChanged
         self._locked = True                # 未选定工作模式即锁定
+        self._pick_offset = 0.0            # 选点偏移（T14 工具区灌入；新点位 Z 向偏移）
+        self._clash_names: set[str] = set()  # 涉事段端点名（T14 干涉红行，读校核结果）
         self._bound_mm = self._read_bound()
         self._build()
 
@@ -61,9 +62,7 @@ class Step2Pane(QWidget):
         box = QVBoxLayout(self)
         box.setContentsMargins(16, 16, 16, 16)
         box.setSpacing(10)
-        title = QLabel(STEP_LABELS[1])
-        title.setObjectName("PlaceholderTitle")
-        self._mode_line = QLabel("当前：未选定")
+        self._mode_line = QLabel("当前：未选定")   # T14 重排：标题行退役（页签统一「程序 · 步骤」）
         self._mode_line.setObjectName("PlaceholderBody")
         self._prompt = QLabel(_LOCK_PROMPT)
         self._prompt.setObjectName("PlaceholderBody")
@@ -73,7 +72,6 @@ class Step2Pane(QWidget):
         self._btn.setProperty("role", "primary")
         self._btn.setEnabled(False)
         self._btn.clicked.connect(self._on_name_current)
-        box.addWidget(title)
         box.addWidget(self._mode_line)
         box.addWidget(self._prompt)
         box.addWidget(self._table, 1)
@@ -105,7 +103,10 @@ class Step2Pane(QWidget):
 
     # --- 点位增删改 ---------------------------------------------------------- #
     def add_face_point(self, fp: FacePoint) -> None:
-        """注入一个 core 换算好的面点；同一 B-Rep 面（source_face）去重，不产生重复点位。"""
+        """注入一个 core 换算好的面点；同一 B-Rep 面（source_face）去重，不产生重复点位。
+
+        选点偏移（T14 工具区）在此并入：新点位 Z 向偏移 ``_pick_offset`` mm。
+        """
         if self._locked:
             self.log.emit("未选定工作模式，步骤②锁定，无法取点")
             return
@@ -115,9 +116,27 @@ class Step2Pane(QWidget):
             return
         wid = self._next_id
         self._next_id += 1
-        self._waypoints.append(Waypoint(id=wid, name=f"P{wid}", pos_mm=fp.pos_mm,
+        pos = (fp.pos_mm[0], fp.pos_mm[1], fp.pos_mm[2] + self._pick_offset)
+        self._waypoints.append(Waypoint(id=wid, name=f"P{wid}", pos_mm=pos,
                                         normal=fp.normal, source_face=fp.source_face))
-        self.log.emit(f"已添加点位 P{wid}（面 {fp.source_face}）")
+        offset_note = f"（含选点偏移 {self._pick_offset:g} mm）" if self._pick_offset else ""
+        self.log.emit(f"已添加点位 P{wid}（面 {fp.source_face}）{offset_note}")
+        self._refresh()
+
+    def set_pick_offset(self, mm: float) -> None:
+        """选点偏移量（mm，仅影响**此后**新取的点位；已有点位不动——可追溯）。"""
+        self._pick_offset = float(mm)
+
+    def set_clash_names(self, names: set[str]) -> None:
+        """涉事段端点点位红行（T14：读校核结果灌入；空集即清）。"""
+        self._clash_names = set(names)
+        self._refresh_silent()
+
+    def set_waypoints(self, points: list[Waypoint]) -> None:
+        """整体替换点位列表（导入恢复用）：不去重、不走锁定门禁，改动照发 ``waypoints_changed``。"""
+        self._waypoints = list(points)
+        top = max((w.id for w in points), default=0)
+        self._next_id = top + 1
         self._refresh()
 
     def delete(self, wid: int) -> None:
@@ -155,12 +174,25 @@ class Step2Pane(QWidget):
         self._loading = False
         self.waypoints_changed.emit(self.waypoints())
 
+    def _refresh_silent(self) -> None:
+        """只重画表格（干涉红行等着色用），⛔ 不发 ``waypoints_changed``——着色不是数据改动，
+        发了会把已生成路径误作废。"""
+        self._loading = True
+        self._table.setRowCount(len(self._waypoints))
+        for row, w in enumerate(self._waypoints):
+            self._fill_row(row, w)
+        self._loading = False
+
     def _fill_row(self, row: int, w: Waypoint) -> None:
         no = QTableWidgetItem(str(w.id))
         no.setFlags(no.flags() & ~Qt.ItemFlag.ItemIsEditable)   # 序号只读、不重排
         no.setData(Qt.ItemDataRole.UserRole, w.id)
         self._table.setItem(row, 0, no)
-        self._table.setItem(row, _NAME_COL, QTableWidgetItem(w.name))
+        name = QTableWidgetItem(w.name)
+        if w.name in self._clash_names:                          # 涉事段端点 ⇒ 红行（三通道的红底）
+            name.setBackground(QBrush(_DENY))
+            name.setToolTip("涉事段端点：见校核结论与「路径仿真」页签")
+        self._table.setItem(row, _NAME_COL, name)
         for k in range(len(w.pos_mm)):
             self._table.setItem(row, _FIRST_COORD_COL + k,
                                 QTableWidgetItem(f"{w.pos_mm[k]:.3f}"))

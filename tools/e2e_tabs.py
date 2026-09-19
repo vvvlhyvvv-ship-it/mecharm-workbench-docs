@@ -14,8 +14,13 @@ StepBar 薄壳判据（L-7）也在 T2：不删件、不进布局、旧引用全
 
 from __future__ import annotations
 
+import pathlib, tempfile
 import re
 
+from PySide6.QtWidgets import QPushButton
+
+import app.pop_import as pop_mod
+from app.prog_tab import CRAFT_NOTE, EXEC_NOTE
 from tools.comm_selftest_kit import check
 from tools.e2e_rig import Rig
 
@@ -222,6 +227,65 @@ def _t8_toolbar(rig: Rig, results: dict) -> None:
           "（mesh.load {reset:true,parts:[]} 零新通道）")
 
 
+def section_t14(rig: Rig, results: dict) -> None:
+    """T9–T12：T14 编程页签（工具区禁用＋倍率／生成并校验＋四步指示／跳转／CSV 往返；T8 后段）。前置：T8 已清空模型 ⇒ 先停跟随解锁取点区；浮层开合与「全禁用可见」由 evidence/T14 截图判（完成标准②③）。"""
+    prog = rig.win.tabshell.prog
+    rig.flow.live.stop("e2e：离线段收尾，停跟随解锁取点区")
+    rig.pump(100)
+    tools = [b for b in prog.findChildren(QPushButton)
+             if b.toolTip() in (LATER_NOTE, CRAFT_NOTE, EXEC_NOTE)]
+    prog._speed.setCurrentIndex(2)
+    rig.pump(50)
+    override = rig.win.pathctl.speed_override
+    print(f"  T9 工具区：禁用钮={len(tools)} 全禁用={all(not b.isEnabled() for b in tools)} "
+          f"倍率50%→override={override:g}")
+    check(results, "T9", len(tools) >= 11 and all(not b.isEnabled() for b in tools)
+          and override == 50.0,
+          "连续/单步/暂停/复位＋插入动作全禁用且提示在场（Δ-7：执行控制在仿真页签、插入动作待工艺口径）；"
+          "倍率下拉写 pathctl.speed_override（SpeedOverride 唯一状态，T15 接同一处 ⛔ 第二套禁造）")
+    subs0 = [s.text() for _, s in prog._flow]
+    imported = rig.import_box()
+    rig.pump(200)
+    prog._offset.setValue(5.0)
+    points = rig.pick()
+    z5 = all(abs(w.pos_mm[2] - 5.0) < 1e-9 for w in points)
+    rig.pump(100)
+    prog._panel.step3._btn.click()                       # 生成并校验轨迹（合并语义）
+    rig.wait(lambda: rig.win.checkctl._result is not None)
+    rig.pump(200)
+    subs1 = [s.text() for _, s in prog._flow]
+    line, clash = prog._verdict.text(), len(prog._panel.step3._clash_ids)
+    prog._offset.setValue(0.0)
+    print(f"  T10 四步：{subs0}→{subs1} 偏移5mm并入={z5} 结论行={line} 涉事红行={clash}")
+    check(results, "T10", imported and subs0 == ["—"] * 4 and z5 and subs1[0].endswith("件")
+          and subs1[1] == "3 点" and subs1[2].endswith("段")
+          and "预警" in line and "允许" in line and clash > 0,
+          "四步流水线由真实内核状态驱动（①件数／②点数／③段数，未达「—」禁造值）；选点偏移并入新点位；"
+          "[生成并校验轨迹]＝生成后自动校核（合并语义，⛔ 不只生成不校核）；结论行三通道＋涉事段/点位红行"
+          "（T16 前现三态口径）")
+    can_send = prog._btn_send.isEnabled()
+    prog._btn_send.click()
+    rig.pump(100)
+    jumped = rig.win.tabshell.current() == "sim"
+    print(f"  T11 下发执行：可用={can_send}（预警态允许）→点击后页签={jumped}")
+    check(results, "T11", can_send and jumped,
+          "「下发执行」为跳转（tabshell.switch_to('sim')），非第二套下发（Δ-4）")
+    asked: list[str] = []
+    pop_mod._confirm = lambda _w, text: (asked.append(text), True)[1]   # 离屏无操作员（先例 T8）
+    key = lambda ws: [(w.id, w.name, w.pos_mm) for w in ws]
+    with tempfile.TemporaryDirectory(prefix="t14_e2e_") as tmp:
+        before = rig.win.panel.step2.waypoints()
+        out_csv = prog.export_csv(str(pathlib.Path(tmp) / "t14.csv"))
+        prog.clear_program()
+        wiped = len(rig.win.panel.step2.waypoints())
+        back = prog.import_file(str(pathlib.Path(tmp) / "t14.csv"))
+    print(f"  T12 往返：CSV={out_csv is not None}（{len(before)} 点＋表头）确认={len(asked)}次 "
+          f"清空后={wiped}点 回读一致={key(back or []) == key(before)}")
+    check(results, "T12", out_csv is not None and len(asked) >= 1 and wiped == 0
+          and key(back or []) == key(before),
+          "存取往返：导出 CSV（UTF-8-BOM 清单视图）→清空（二次确认）→导入，序号/名称/坐标逐点一致"
+          "（数据走 core.project proj/v1／清单视图，⛔ 不改工程格式）")
+
 TAB_ONLINE: tuple[tuple[str, str, object], ...] = (
     ("T1", "顶栏七区", section_t_online), ("T2", "页签导航·StepBar薄壳", None),
     ("T3", "页签徽标真值", None), ("T4", "数据芯片·双灯", None), ("T5", "右栏双面板", None),
@@ -229,4 +293,8 @@ TAB_ONLINE: tuple[tuple[str, str, object], ...] = (
 )
 TAB_OFFLINE: tuple[tuple[str, str, object], ...] = (
     ("T7", "离线占位·回灰", section_t_offline), ("T8", "装配树工具行", None),
+)
+TAB_T14: tuple[tuple[str, str, object], ...] = (
+    ("T9", "工具区·倍率SpeedOverride", section_t14), ("T10", "四步指示·生成并校验", None),
+    ("T11", "下发执行跳转", None), ("T12", "存取往返CSV", None),
 )

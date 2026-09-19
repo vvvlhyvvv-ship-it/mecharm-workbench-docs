@@ -28,6 +28,7 @@ from core.config import REPO_ROOT, ConfigError, MachineConfig, load_machine
 from core.kinematics.ik import Chain, derive_chain
 from core.kinematics.transform import CoordFrame, axis_swap_frame, to_column_major
 from core.path import PathSummary, Segment, gen_path, summarize, tool_pose_in_model
+from comm.opcua_client import SPEED_OVERRIDE_FULL, SPEED_OVERRIDE_MIN
 
 _TICK_MS = 16                     # 播放时钟约 60Hz（软件刷新率，非机台参数；见模块 docstring）
 # 同一件事分两种说法（02 §2 步骤③ 禁术语上屏、§4 全中文）：`_FRAME_TELL` 给操作员看，
@@ -40,9 +41,12 @@ log = logging.getLogger(__name__)
 
 
 class PathController(QObject):
-    """步骤③控制器。信号 `changed()`＝路径可用性变了（shell 据此重算步骤④⑤门禁）。"""
+    """步骤③控制器。信号 `changed()`＝路径可用性变了（shell 据此重算步骤④⑤门禁）；
+    `generated_ok()`＝一次生成**成功**（T14「生成并校验轨迹」合并语义的搭扣：
+    pop_import.install_t14 把它连到 checkctl.run_check——生成完自动校核）。"""
 
     changed = Signal()
+    generated_ok = Signal()
 
     def __init__(self, panel, bridge, stepbar, statusbar, parent: QObject | None = None) -> None:
         super().__init__(parent)
@@ -55,11 +59,30 @@ class PathController(QObject):
         self._chain: Chain | None = None
         self._frame = axis_swap_frame({"x": "+x", "y": "+y", "z": "+z"})   # 单位框（见 docstring）
         self._frame_warned = False
+        self._speed_override = SPEED_OVERRIDE_FULL   # SpeedOverride 唯一持有处（1.0–100.0%）
         self._elapsed = 0.0
         self._last = 0.0
         self._timer = QTimer(self)
         self._timer.timeout.connect(self._tick)
         self._wire()
+
+    # --- 速度倍率（T14：编程页签工具区接这里；T15 的执行控制组接同一处 ⛔ 第二套状态禁造）--- #
+    @property
+    def speed_override(self) -> float:
+        """当前速度倍率（%，契约 §5.1 SpeedOverride；下发时随段一并写入 PLC）。"""
+        return self._speed_override
+
+    def set_speed_override(self, value: float) -> None:
+        """改倍率（值域＝契约 §5.1 的 1.0–100.0%，越界人话拒绝 ⛔ 不钳不吞）。"""
+        try:
+            value = float(value)
+        except (TypeError, ValueError):
+            return self._say(f"速度倍率未改：收到无法识别的值 {value!r}")
+        if not SPEED_OVERRIDE_MIN <= value <= SPEED_OVERRIDE_FULL:
+            return self._say(f"速度倍率 {value:g}% 超出范围 "
+                             f"{SPEED_OVERRIDE_MIN:g}–{SPEED_OVERRIDE_FULL:g}%（契约 §5.1），未改")
+        self._speed_override = value
+        self._say(f"速度倍率：{value:g}%（下发时随段写入，PLC 有权再钳位）")
 
     def _wire(self) -> None:
         step3 = self._panel.step3
@@ -104,6 +127,7 @@ class PathController(QObject):
         self._panel.step3.show_segments(self._segments, summary)
         self._show_path(self._segments)
         self._announce(summary)
+        self.generated_ok.emit()      # T14 合并语义：生成成功 ⇒ 自动校核（install_t14 接 run_check）
 
     def _bind(self) -> bool:
         """首次生成时载入机台配置与驱动链（配置读不到就当场人话报错，⛔ 不塞默认值）。"""

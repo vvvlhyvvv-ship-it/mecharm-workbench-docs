@@ -1,11 +1,14 @@
-"""app.steps.step1_import —— 右栏步骤①「导入模型」业务页（T05；02 §2 步骤①）。
+"""app.steps.step1_import —— 步骤①「导入模型」的导入管线与结果信号（T05；T14 浮层化）。
 
 两件东西，单一职责各管一段：
   ImportWorker  QThread 后台跑 core.geometry 的「解析→三角化→优化」三阶段，主线程不阻塞
                 （02 §2「大文件导入期间界面可交互」）。取消是**协作式**的：只在阶段边界
                 检查标志——OCC 单次转换不可中途抢占，故取消在下一阶段生效。
-  Step1Pane     右栏步骤①页：[选择模型文件] 主按钮 + 三阶段进度条 + ✓实体/✗面片结果 + 统计行。
-                只发高层信号 imported/failed，**不碰桥/装配树/步骤条**（那是 shell 的装配职责）。
+  Step1Pane     导入结果的信号源。T14 起界面形态退场为顶栏浮层（app/pop_import.py **复用
+                本页管线与缓存**：拖拽／[选择文件]都转 ``start_import``，进度经新增的
+                ``stage_changed`` 转发信号、结果读数取 ``imported`` 信号里的 asm.stats 真值）；
+                本页仍被 ProgTab setParent 收容（保 e2e「step1 归编程页签」判据）、主窗拖放
+                照旧走 ``start_import``。只发高层信号 imported/failed，**不碰桥/装配树/步骤条**。
 
 弦高容差 deflection 走 machine.yaml limits（禁散写字面量，T05 步骤3）；读不到即导入失败、
 转 failed 信号，不在代码里塞默认值。坐标单位 mm（与 core.geometry 一致）。
@@ -19,7 +22,6 @@ from PySide6.QtCore import Qt, QThread, Signal
 from PySide6.QtWidgets import (QFileDialog, QHBoxLayout, QLabel, QProgressBar, QPushButton,
                                QVBoxLayout, QWidget)
 
-from app.stepbar import STEP_LABELS
 from core.config import REPO_ROOT, load_machine
 from core.geometry import encode_mesh_parts, import_model, tessellate
 
@@ -75,10 +77,11 @@ class ImportWorker(QThread):
 
 
 class Step1Pane(QWidget):
-    """右栏步骤①页。信号 imported(object={asm,parts,payload})、failed(str)。"""
+    """导入结果信号源（T14 浮层化后不进布局）。信号：imported/failed/stage_changed。"""
 
     imported = Signal(object)
     failed = Signal(str)
+    stage_changed = Signal(str)      # 三阶段进度转发（浮层显示用；本页自身不再可见）
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -90,8 +93,6 @@ class Step1Pane(QWidget):
         box = QVBoxLayout(self)
         box.setContentsMargins(16, 16, 16, 16)
         box.setSpacing(12)
-        title = QLabel(STEP_LABELS[0])
-        title.setObjectName("PlaceholderTitle")
         self._hint = QLabel("把 STEP / IGES / STL 文件拖到视口，或点下方按钮选择")
         self._hint.setObjectName("PlaceholderBody")
         self._hint.setWordWrap(True)
@@ -110,7 +111,6 @@ class Step1Pane(QWidget):
         row = QHBoxLayout()
         row.addWidget(self._cancel)
         row.addStretch(1)
-        box.addWidget(title)
         box.addWidget(self._hint)
         box.addStretch(1)
         box.addWidget(self._result)
@@ -139,6 +139,7 @@ class Step1Pane(QWidget):
     def _on_stage(self, name: str) -> None:
         self._progress.setValue(_STAGES.index(name) + 1 if name in _STAGES else 0)
         self._set_result(f"正在{name}…", "busy")
+        self.stage_changed.emit(name)      # 浮层的三阶段进度（T14；本页自身不再可见）
 
     def _on_done(self, res: object) -> None:
         self._set_busy(False)

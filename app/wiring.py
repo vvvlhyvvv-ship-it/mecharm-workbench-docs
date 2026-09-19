@@ -12,12 +12,13 @@ from __future__ import annotations
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QKeySequence, QShortcut
-from PySide6.QtWidgets import (QMessageBox, QPushButton, QSplitter, QVBoxLayout, QWidget)
+from PySide6.QtWidgets import QPushButton, QSplitter, QVBoxLayout, QWidget
 
 from app.checkctl import CheckController
 from app.chips import HzMeter
 from app.joints_panel import JointsPanel
 from app.pathctl import PathController
+from app.pop_import import install_t14
 from app.stage import SPECS
 from app.tabshell import TabShell
 from app.topbar import TopBar
@@ -129,8 +130,7 @@ def _wire_tabs(win) -> None:
     """T13 范式切换的信号段：页签导航、顶栏回填、右栏面板、工具行与链路只读侧。"""
     win.tabshell.tree.selected.connect(win._on_tree_selected)
     win.tabshell.tree.focused.connect(win._on_tree_focused)
-    win.topbar.import_requested.connect(
-        lambda: QMessageBox.information(win, "三维导入", "三维导入浮层：待后续版本"))
+    install_t14(win)                  # T14：导入浮层＋编程页签接线（先例＝sendctl.install_send_flow）
     win.topbar.logout_requested.connect(win.return_to_login)
     win.workmode.committed.connect(win.joints.set_mode)
     win.pathctl.changed.connect(lambda: win.tabshell.set_badge("prog", len(win.pathctl.segments())))
@@ -187,10 +187,12 @@ def _apply_scene(win, drop_ids, action: str) -> None:
     new_parts = drop_mesh_parts(parts, ids)
     payload = encode_mesh_parts(new_parts)
     win.bridge.call_view("mesh.load", {"reset": True, "parts": payload})
+    win._last = {"asm": new_asm, "parts": new_parts, "payload": payload}
+    # 先更新门禁真值再触发作废链（T14）：invalidate/clear 的事件里编程页签四步指示与
+    # 门禁都会刷新，读到旧 _brep_ok 就会把「已清空」显示成旧件数（T14 e2e 实测暴露）
+    win._brep_ok = bool(new_asm.is_brep) and part_count(new_asm.tree) > 0
     win.pathctl.invalidate(f"已{action}")
     win.panel.step2.clear()               # 点位 source_face 随删除失效 → 真清空（连带视口标号牌）
-    win._last = {"asm": new_asm, "parts": new_parts, "payload": payload}
-    win._brep_ok = bool(new_asm.is_brep) and part_count(new_asm.tree) > 0
     win._refresh_unlock()
     count = part_count(new_asm.tree)
     win.tabshell.tree.populate(new_asm.tree_payload())
