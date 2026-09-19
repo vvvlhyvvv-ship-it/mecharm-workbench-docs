@@ -27,7 +27,7 @@ from core.path import estimate_duration, tool_pose_in_model
 
 _COLS = ("步", "时间(s·估算)", "涉事设备", "X(mm)", "Z(mm)", "状态")
 _DASH = "—"
-_CLASH_HOOK = "T16 挂点：干涉清单区（按设备归并＋干涉对明细）——本容器届时由 T16 填充"
+_CLASH_HOOK = "干涉清单区占位（按设备归并＋干涉对明细）——待后续版本接入"
 
 
 class _Track(QWidget):
@@ -113,7 +113,7 @@ class SimTab(QWidget):
         self._section("② 执行控制 · 下发", box)
         box.addWidget(panel.step5)
         panel.step5.show()   # 摘自 Panel 的栈页带着隐藏态，须显式复显（T13 同款）
-        self._section("③ 干涉清单 · 按设备归并（T16 接入）", box)
+        self._section("③ 干涉清单 · 按设备归并（待后续版本）", box)
         box.addWidget(clash)
         self._section("④ 轨迹清单", box)
         listbar = QHBoxLayout()
