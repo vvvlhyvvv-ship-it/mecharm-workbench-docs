@@ -47,7 +47,7 @@ from core.config.ui_config import load_ui  # noqa: E402
 from tools.comm_selftest_kit import check, force_utf8_stdout, guarded, recording  # noqa: E402
 from tools.e2e_faults import section_h  # noqa: E402  卡片步骤④ 异常三用例的判据（拆件理由见那件 docstring）
 from tools.e2e_rig import CONFIG, STAGES, THREE_POINTS, Rig  # noqa: E402
-from tools.e2e_tabs import TAB_OFFLINE, TAB_ONLINE  # noqa: E402  T13 起页签级判据（L-2 预授权拆件）
+from tools.e2e_tabs import TAB_OFFLINE, TAB_ONLINE, TAB_T14  # noqa: E402  T13 起页签级判据（L-2）
 
 OUTPUT = pathlib.Path("evidence/T10/e2e_smoke.txt")
 UI_CONFIG = pathlib.Path("config/ui.yaml")   # T12 S 节：取证档判据读同一份真实交付物
@@ -249,7 +249,7 @@ PLAN: tuple[tuple[str, str, object], ...] = (
     ("G7", "模式互斥", None),
 ) + TAB_ONLINE + (                                   # T1–T6 须在 G（在线）与 H（断网）之间
     ("H1", "越界丢帧", section_h), ("H2", "PLC 拒绝", None), ("H3", "断线冻结", None),
-) + TAB_OFFLINE                                      # T7–T8 须在 H 后（H2 还要有效路径、H3 后判离线）
+) + TAB_OFFLINE + TAB_T14                           # T7–T8 须在 H 后；T9–T12（T14）在其后
 
 
 def selected(key: str, only: str) -> bool:

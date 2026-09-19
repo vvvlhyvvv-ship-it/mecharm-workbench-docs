@@ -1,39 +1,38 @@
-"""app.steps.step3_path —— 右栏步骤③「生成路径」业务页（T07；02 §2 步骤③）。
+"""app.steps.step3_path —— 步骤③「段清单与播放控制」业务页（T07；T14 迁入编程页签重排）。
 
 单一职责＝**段清单的视图与播放控制按钮**；段真值（长度／时长／关节目标／是否可达）由
 `core.path.gen_path` 算出、经 `app.pathctl` 注入（`show_segments`），本页不自行计算几何、
 不持有机台参数（02 §2 禁止事项、03 §3 单向数据流）。用户意图经信号回灌控制器：
 `generate_requested`／`play_requested`／`pause_requested`／`option_changed`／`log`。
 
-五件可见元素（02 §2 步骤③＋T07 卡步骤 1／完成标准③）：
-  ① 段型下拉「点位型（空程）／轮廓型（作业）」——卡片步骤 1 要求界面可切；⚠️ 02 §2 步骤③ 的
-     布局清单里**没有**此控件（登记为文档回填项，本件不擅改 02）
-  ② `blending` 复选框，**默认不勾**（＝逐段到达；电Q-8 回执后才切），勾选即人话告警
-  ③ [生成路径] 主按钮（16px 粗体、高≥40px、占右栏整宽，02 §4）
-  ④ 段清单表 [段号｜起点→终点｜类型｜长度 mm]：单位只在表头标注一次、不逐行重复（02 §4）；
-     不可达段红底＋⛔＋原因（颜色／图标／文字三通道），整句原因另在表下红字行显示
-  ⑤ 汇总行「共 N 段 · 总长 X m · 预估节拍 Y s」＋[▶播放][⏸暂停]
+T14 重排（语义零改动，冻结行为逐条保留）：
+  · 标题行退役（页签统一「程序 · 步骤」区）；**[生成路径] 升格为「生成并校验轨迹」**（合并
+    语义＝生成成功后自动校核，接线在 pop_import.install_t14：generated_ok→checkctl.run_check），
+    按钮**不进本页布局**、由 ProgTab 底部行收容（对象与门禁逻辑仍属本页）；
+  · 段型下拉按演示稿命名显示 **C-Lin／J-Lin**（点位型/轮廓型语义不变，逐项 tooltip 全中文）；
+  · 新增 `set_clash_ids`：涉事段红行（读校核结果，T16 前的现三态口径）。
 
-⛔ **禁止上屏**：关节角／矩阵／插补（02 §2 步骤③）——故表里没有关节列，`Segment.joints_*`
-只交给控制器驱动动画。颜色取 `app.theme.TOKENS`（配色唯一真值处，禁散写色值、禁改 theme.py）。
+四件可见元素：① 段型下拉 ② `blending` 复选框（默认不勾，电Q-8 回执后才切）③ 段清单表
+[段号｜起点→终点｜类型｜长度 mm]（不可达段红底＋⛔＋原因三通道）④ 汇总行＋[▶播放][⏸暂停]。
+⛔ **禁止上屏**：关节角／矩阵／插补（02 §2 步骤③）。颜色取 `app.theme.TOKENS`。
 """
 
 from __future__ import annotations
 
-from PySide6.QtCore import Signal
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QBrush, QColor, QPalette
 from PySide6.QtWidgets import (QAbstractItemView, QCheckBox, QComboBox, QHBoxLayout, QHeaderView,
                                QLabel, QPushButton, QTableWidget, QTableWidgetItem, QVBoxLayout,
                                QWidget)
 
-from app.stepbar import STEP_LABELS
 from app.theme import TOKENS
 from core.path import KIND_CONTOUR, KIND_POINT, PathSummary, Segment
 
 _COLS = ("段号", "起点→终点", "类型", "长度 mm")
-_KIND_ITEMS = ((KIND_POINT, "点位型（空程快速）"), (KIND_CONTOUR, "轮廓型（作业速度）"))
+_KIND_ITEMS = ((KIND_POINT, "C-Lin", "点位型（空程快速）：段间快速定位到目标点"),
+               (KIND_CONTOUR, "J-Lin", "轮廓型（作业速度）：沿轮廓连续作业"))
 _TYPE_NAMES = {"JOINT": "点位", "LINE": "直线"}
-_EMPTY_HINT = "尚未生成路径：先在步骤②取点，再点[生成路径]"
+_EMPTY_HINT = "尚未生成路径：先取点，再点[生成并校验轨迹]"
 # ⚠️ 电Q-8（下发轨迹段格式）未回执：勾选只改段携带的 `blending` 标志位，不改几何与时长；
 # 上屏文案按 02 §4「全中文」给操作员说法，⛔ 不带内部编号与英文术语。
 _BLEND_TELL = ("开启后各段之间不停顿、直接过渡到下一段。机台侧接收格式尚未确认，"
@@ -58,6 +57,7 @@ class Step3Pane(QWidget):
         self._summary: PathSummary | None = None
         self._current = 0             # 播放中的当前段号（1-based；0＝未播放）
         self._playing = False
+        self._clash_ids: set[int] = set()   # 涉事段（T14 干涉红行，读校核结果）
         self._build()
 
     # --- 构建 --------------------------------------------------------------- #
@@ -65,11 +65,10 @@ class Step3Pane(QWidget):
         box = QVBoxLayout(self)
         box.setContentsMargins(16, 16, 16, 16)
         box.setSpacing(10)
-        title = QLabel(STEP_LABELS[2])
-        title.setObjectName("PlaceholderTitle")
         self._kind = QComboBox()
-        for value, text in _KIND_ITEMS:
+        for value, text, tip in _KIND_ITEMS:
             self._kind.addItem(text, value)
+            self._kind.setItemData(self._kind.count() - 1, tip, Qt.ItemDataRole.ToolTipRole)
         self._kind.currentIndexChanged.connect(self._on_option_changed)
         self._blend = QCheckBox("连续过渡（默认关）")
         self._blend.setChecked(False)          # 完成标准③：默认 False
@@ -78,7 +77,7 @@ class Step3Pane(QWidget):
         self._hint = QLabel(_EMPTY_HINT)
         self._hint.setObjectName("PlaceholderBody")
         self._hint.setWordWrap(True)
-        self._btn = QPushButton("生成路径")
+        self._btn = QPushButton("生成并校验轨迹")    # 合并语义（T14）：不进本页布局，ProgTab 底部收容
         self._btn.setProperty("role", "primary")
         self._btn.setEnabled(False)
         self._btn.clicked.connect(self.generate_requested)
@@ -98,11 +97,9 @@ class Step3Pane(QWidget):
             widget.setEnabled(False)
             widget.clicked.connect(slot)
             play_row.addWidget(widget, 1)
-        box.addWidget(title)
         box.addLayout(kind_row)
         box.addWidget(self._blend)
         box.addWidget(self._hint)
-        box.addWidget(self._btn)
         box.addWidget(self._table, 1)
         box.addWidget(self._block_line)
         box.addWidget(self._summary_line)
@@ -184,6 +181,16 @@ class Step3Pane(QWidget):
         """当前段型（`core.path.KIND_POINT`｜`KIND_CONTOUR`）。"""
         return self._kind.currentData()
 
+    def current_kind_text(self) -> str:
+        """当前段型的全中文说法（CSV「类型」列用；下拉只显示 C-Lin/J-Lin 短代号）。"""
+        return next(tip.split("：")[0] for v, _, tip in _KIND_ITEMS
+                    if v == self._kind.currentData())
+
+    def set_clash_ids(self, seg_ids: set[int]) -> None:
+        """涉事段红行（T14：读校核结果灌入；空集即清）。只重画 ⛔ 不作废数据。"""
+        self._clash_ids = set(seg_ids)
+        self._paint()
+
     def blending(self) -> bool:
         """连续过渡开关（电Q-8 回执前默认 False）。"""
         return self._blend.isChecked()
@@ -206,16 +213,21 @@ class Step3Pane(QWidget):
         self._paint()
 
     def _paint(self) -> None:
-        """三通道着色：不可达段红底＋⛔前缀（图标）、当前段蓝底；红压过蓝（禁发优先于进度）。"""
+        """三通道着色：不可达段红底＋⛔前缀、涉事段红底＋⚠前缀、当前段蓝底（红压过蓝——
+        禁发优先于涉事提示、涉事优先于进度）。"""
         for row, seg in enumerate(self._segments):
-            color = _DENY if seg.blocked else (_ACCENT if seg.id == self._current else None)
+            clash = seg.id in self._clash_ids
+            color = _DENY if (seg.blocked or clash) else (_ACCENT if seg.id == self._current else None)
             for col in range(len(_COLS)):
                 item = self._table.item(row, col)
                 if item is not None:
                     item.setBackground(QBrush(color) if color else QBrush())
+                    if clash and not seg.blocked:
+                        item.setToolTip("涉事段：见校核结论与「路径仿真」页签")
             first = self._table.item(row, 0)
             if first is not None:
-                first.setText(f"⛔ {seg.id}" if seg.blocked else str(seg.id))
+                mark = "⛔" if seg.blocked else ("⚠" if clash else "")
+                first.setText(f"{mark} {seg.id}" if mark else str(seg.id))
 
     def _block_text(self) -> str:
         """表下红字行：第一条不可达原因整句＋其余段数（表里只放⛔，原因要能读全）。"""
@@ -230,7 +242,7 @@ class Step3Pane(QWidget):
         """改段型 ⇒ 已生成路径作废（段类型与速度都随段型变，留旧表＝给用户假数据）。"""
         if self._summary is None:
             return
-        self.option_changed.emit(f"段型改为「{self._kind.currentText()}」")
+        self.option_changed.emit(f"段型改为「{self.current_kind_text()}」")
         self.clear()
 
     def _on_blend_toggled(self, on: bool) -> None:
