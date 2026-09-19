@@ -1,0 +1,2 @@
+﻿工步,段号,动作,X(mm),Y(mm),Z(mm),速度(mm/s),ProcessStep,OPC UA 变量,备注
+1,1,空程移动,200.000,0.000,0.000,300,1,ns=3;s="DB_SW_to_PLC"."Seg",估算值
